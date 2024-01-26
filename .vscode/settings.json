@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "cv.h": "c",
+        "highgui_c.h": "c",
+        "stdio.h": "c",
+        "imgcodecs_c.h": "c",
+        "math.h": "c",
+        "array": "c",
+        "string_view": "c",
+        "initializer_list": "c",
+        "utility": "c"
+    }
+}
