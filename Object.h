@@ -1,15 +1,14 @@
-#include<opencv2/imgcodecs/imgcodecs_c.h>
-#include<stdio.h>
-#include<math.h>
-#include<opencv/cv.h>
-#include<opencv/highgui.h>
-int cvRound(double value) {return(ceil(value));}
-typedef struct{
-    float x, y, width, height; // center_x, center_y, width, height
-} Bbox;
+#ifndef OBJECTS_H
+#define OBJECTS_H
 
-typedef struct{
-    Bbox Rect;
+struct Bbox {
+    float x, y, width, height; // center_x, center_y, width, height
+};
+
+struct Object {
+    struct Bbox Rect;
     int label;
     float prob;
-} Object;
+};
+
+#endif  // OBJECTS_H
