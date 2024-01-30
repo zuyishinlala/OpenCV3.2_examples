@@ -6,8 +6,8 @@
 #include "Object.h"
 #include <stdlib.h>
 #include <time.h>
-#include<stdio.h>
-#include<math.h>
+#include <stdio.h>
+#include <math.h>
 int cvRound(double value) {return(ceil(value));}
 
 static void swap(struct Object *a, struct Object *b) {
@@ -47,7 +47,7 @@ float randomFloat(float min, float max) {
 
 int main(int argc, char** argv){
     srand((unsigned int)time(NULL));
-    int NUMOFOBJ = 0;
+    int NUMOFOBJ = 10;
     struct Object objects[NUMOFOBJ];
 
     for (int i = 0; i < NUMOFOBJ; i++) {

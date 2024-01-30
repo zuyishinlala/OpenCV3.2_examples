@@ -8,7 +8,7 @@ int cvRound(double value) {return(ceil(value));}
 void DrawPoly(IplImage* img,CvPoint** pts,int *npts,int NumOfPo,CvScalar FilledColor){
     /*
     If the functioned use at the same time, overlayed area will not fill color.
-    If called function seperately, overlayed area will fill color.
+    If function are called seperately, overlayed area will fill color.
     */
     cvFillPoly(img, pts, npts, NumOfPo, FilledColor, CV_AA, 0);
     return;
