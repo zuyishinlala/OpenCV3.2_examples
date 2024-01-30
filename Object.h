@@ -6,9 +6,10 @@ struct Bbox {
 };
 
 struct Object {
-    struct Bbox Rect;
-    int label;
-    float prob;
+    float confidence;   // obj confidence score
+    struct Bbox Rect;   // Bounding Box
+    int label;          // classification label
+    float prob;         // classification max prob score
 };
 
 #endif  // OBJECTS_H

@@ -56,17 +56,17 @@ int main(int argc, char** argv){
         objects[i].Rect.width = randomFloat(1.0, 10.0);
         objects[i].Rect.height = randomFloat(1.0, 10.0);
         objects[i].label = rand() % 5 + 1; 
-        objects[i].prob = randomFloat(0.0, 1.0);
+        objects[i].confidence = randomFloat(0.0, 1.0);
     }
     
     for (int i = 0; i < NUMOFOBJ; i++) {
-        printf("  Probability: %.2f\n", objects[i].prob);
+        printf("  Probability: %.2f\n", objects[i].confidence);
     }
     qsort_descent_inplace(objects, 0, NUMOFOBJ - 1);
     printf("====After====\n");
 
     for (int i = 0; i < NUMOFOBJ; i++) {
-        printf("  Probability: %.2f\n", objects[i].prob);
+        printf("  Probability: %.2f\n", objects[i].confidence);
     }
     return 0;
 }

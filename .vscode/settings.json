@@ -10,6 +10,7 @@
         "initializer_list": "c",
         "utility": "c",
         "object.h": "c",
-        "highgui.h": "c"
+        "highgui.h": "c",
+        "limits": "c"
     }
 }
