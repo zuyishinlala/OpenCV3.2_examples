@@ -10,6 +10,7 @@ struct Object {
     struct Bbox Rect;   // Bounding Box
     int label;          // classification label
     float prob;         // classification max prob score
+    float** Mask;       // Final Binary Mask
 };
 
 #endif  // OBJECTS_H

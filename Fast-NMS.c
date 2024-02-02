@@ -13,9 +13,12 @@ static float intersection_area(const struct Bbox a, const struct Bbox b) {
 
 static void nms_sorted_bboxes(const struct Object* faceobjects, int size, int* picked, float nms_threshold, float conf_threshold) {
     /*
-    1. Extract box with obj confidence > conf_threshold and prob > conf_threshold
-    2.
-    */ 
+    - Extract box with obj confidence > conf_threshold and prob > conf_threshold
+    - For every prob in 8500 grids: class prob *=  Obj confidence 
+    - Find the max object probability and the class index 
+    - Extract boxes with class prob > conf_threshold
+    - Create an array to store output [ NumOfOutputs, 39]
+    */
     if(size == 0) return;
     float areas[size];
     for (int i = 0 ; i < size; i++) { // Calculate areas
