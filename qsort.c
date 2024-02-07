@@ -19,13 +19,13 @@ static void swap(struct Object *a, struct Object *b) {
 static void qsort_descent_inplace(struct Object *Objects, int left, int right) {
     int i = left;
     int j = right;
-    float p = Objects[(left + right) / 2].prob;
+    float p = Objects[(left + right) / 2].conf;
 
     while (i <= j) {
-        while (Objects[i].prob > p)
+        while (Objects[i].conf > p)
             i++;
 
-        while (Objects[j].prob < p)
+        while (Objects[j].conf < p)
             j--;
 
         if (i <= j) {
@@ -56,17 +56,10 @@ int main(int argc, char** argv){
         objects[i].Rect.width = randomFloat(1.0, 10.0);
         objects[i].Rect.height = randomFloat(1.0, 10.0);
         objects[i].label = rand() % 5 + 1; 
-        objects[i].confidence = randomFloat(0.0, 1.0);
     }
     
-    for (int i = 0; i < NUMOFOBJ; i++) {
-        printf("  Probability: %.2f\n", objects[i].confidence);
-    }
     qsort_descent_inplace(objects, 0, NUMOFOBJ - 1);
     printf("====After====\n");
 
-    for (int i = 0; i < NUMOFOBJ; i++) {
-        printf("  Probability: %.2f\n", objects[i].confidence);
-    }
     return 0;
 }
