@@ -9,7 +9,7 @@ struct Object {
     struct Bbox Rect;               // Bounding Box
     int label;                      // Classification label
     float conf;                     // Classification max prob score
-    int mask_idx;
+    float* maskcoeff;
 };
 
 #endif  // OBJECTS_H
