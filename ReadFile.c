@@ -94,29 +94,6 @@ static void rescale_mask()
     // Obtain Original Mask for Orginial Image
 }
 
-static void max_classpred(float (*cls_pred)[NUM_CLASSES], float *max_predictions, int *class_index)
-{
-    // Obtain max_prob and the max class index
-    for (int i = 0; i < ROWSIZE; ++i)
-    {
-        float *predictions = &cls_pred[i][0]; // a pointer to the first column of each row
-        float max_pred = 0;
-        int max_class_index = -1;
-
-        // iterate all class probability
-        for (int class_idx = 0; class_idx < NUM_CLASSES; ++class_idx)
-        {
-            if (max_pred < predictions[class_idx])
-            {
-                max_pred = predictions[class_idx];
-                max_class_index = class_idx;
-            }
-        }
-        // store max data
-        max_predictions[i] = max_pred;
-        class_index[i] = max_class_index;
-    }
-}
 
 static void xyxy2xywh()
 {
@@ -127,21 +104,19 @@ int main(int argc, char **argv)
 
     // passed data from npu3
     struct Pred_Input input;
+    float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
     /*
     ================================================
         To-do: Read files and store data into arrays
     ================================================
     */
-    // input.init();
-
-    float max_clsprob[ROWSIZE] = {0};
-    int max_class_index[ROWSIZE] = {0};
 
     // For NMS
-    struct Object ValidDetections[MAX_DETECTIONS]; // Object position is stored as xywh
+    struct Object ValidDetections[MAX_DETECTIONS];
     int CountValidDetect = 0;
 
-    max_classpred(input.cls_pred, max_clsprob, max_class_index);
     sigmoid(input.cls_pred, ROWSIZE, NUM_CLASSES);
-    post_regpreds(input.reg_pred, "xyxy");
+    post_regpreds(input.reg_pred, "xywh");
+    // non_max_suppression_seg
+
 }

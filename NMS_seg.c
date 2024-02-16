@@ -4,7 +4,36 @@
 #include "Input.h"
 
 // ===================================
-// Qsort all objects
+// Find Max class probability for each row
+// ===================================
+static void max_classpred(float (*cls_pred)[NUM_CLASSES], float *max_predictions, int *class_index)
+{
+    // Obtain max_prob and the max class index
+    for (int i = 0; i < ROWSIZE ; ++i)
+    {
+        float *predictions = &cls_pred[i][0]; // a pointer to the first column of each row
+        float max_pred = 0;
+        int max_class_index = -1;
+
+        // iterate all class probability
+        for (int class_idx = 0; class_idx < NUM_CLASSES; ++class_idx)
+        {
+            if (max_pred < predictions[class_idx])
+            {
+                max_pred = predictions[class_idx];
+                max_class_index = class_idx;
+            }
+        }
+        // store max data
+        max_predictions[i] = max_pred;
+        class_index[i] = max_class_index;
+    }
+    return;
+}
+
+
+// ===================================
+// Qsort all objects by confidence
 // ===================================
 static void swap(struct Object *a, struct Object *b)
 {
@@ -42,7 +71,7 @@ static void qsort_inplace(struct Object *Objects, int left, int right)
 }
 
 // ========================================
-// Perform Fast-NMS
+// Calculate intersection area
 // ========================================
 static float intersection_area(const struct Bbox a, const struct Bbox b) {
     float x_overlap = fmax(0, fmin(a.x + a.height / 2, b.x + b.height / 2) - fmax(a.x - a.height / 2, b.x - b.height / 2));
@@ -50,77 +79,77 @@ static float intersection_area(const struct Bbox a, const struct Bbox b) {
     return x_overlap * y_overlap;
 }
 
-static void nms_sorted_bboxes(const struct Object* faceobjects, int size, int* picked, float nms_threshold, float conf_threshold) {
+// ========================================
+// Perform NMS
+// ========================================
+static void nms_sorted_bboxes(const struct Object* faceobjects, int size, struct Object* picked_object, int *CountValidDetect) {
     /*
     - Extract box with obj confidence > conf_threshold and prob > conf_threshold
-    - For every prob in 8500 grids: class prob *=  Obj confidence 
+    - For prob in each grids: class prob *=  Obj confidence 
     - Find the max object probability and the class index 
     - Extract boxes with class prob > conf_threshold
     - Create an array to store output [ NumOfOutputs, 39]
     */
-    if(size == 0) return;
-    float areas[size];
-    for (int i = 0 ; i < size; i++) { // Calculate areas
-        areas[i] = (faceobjects[i].Rect.width) * (faceobjects[i].Rect.height);
+    if(size == 0){
+        *CountValidDetect = 0;
+        return;
     }
-    // Fast-NMS start
-    // Initialize Matrix 
-    float iouMatrix[size][size];
-    float colmaxIOU[size];
+    int CountValid = 0;
+
+    // Calculate areas
+    float areas[ROWSIZE];
+    for (int row_index = 0 ; row_index < size ; row_index++) {
+        areas[row_index] = (faceobjects[row_index].Rect.width) * (faceobjects[row_index].Rect.height);
+    }
+
+    // ==============================
+    // Fast-NMS
+    // ==============================
+    float maxIOU[ROWSIZE]; // record max value
 
     // Calculate IOU & record max value for every column(dp)
     for(int r = 0 ; r < size ; r++){
-        for(int c = r + 1 ; c < size ; c++){ // Calculate IOU
+        for(int c = r + 1 ; c < size ; c++){
+
+            // Calculate IOU
             float inter_area = intersection_area(faceobjects[r].Rect, faceobjects[c].Rect);
             float union_area = areas[r] + areas[c] - inter_area;
             float iou = inter_area / union_area;
-            iouMatrix[r][c] = iou;
-            if(iouMatrix[r][c] > colmaxIOU[c]) //dp, update max value for every column
-                colmaxIOU[c] = iou;
+
+            //dp, record max value
+            if(iou > maxIOU[c]) 
+                maxIOU[c] = iou;
         }
     }
 
-    // Picked good instances
-    for(int i = 0 ; i < size ; i++){
-        if(colmaxIOU[i] < nms_threshold)
-            picked[i] = 1;
+    // Pick good instances
+    for(int row_index = 0 ; row_index < size ; row_index++){
+        if(maxIOU[row_index] < NMS_THRESHOLD) // keep object i
+            picked_object[CountValid++] = faceobjects[row_index];
     }
-    /*
-    for (i = 0 ; i < n ; i++) {
-        int keep = 1;
-        for (j = 0 ; j < picked_count; j++) {
-            float inter_area = intersection_area(faceobjects[i].Rect, faceobjects[picked[j]].Rect);
-            float union_area = areas[i] + areas[picked[j]] - inter_area;
-            if (inter_area / union_area > nms_threshold)
-                keep = 0;
-        }
-        if (keep) {
-            picked[picked_count++] = i;
-        }
-    }
-    */
+    *CountValidDetect = CountValid;
+    return;
 }
 
 
-static void non_max_suppression_seg(struct Pred_Input *input, float *max_prob, int max_index, float conf_thres, struct Object *objects, float iou_thres, char *classes, int agnostic, int multi_label)
+static void non_max_suppression_seg(struct Pred_Input *input, char *classes, int agnostic, int multi_label, struct Object *picked_objects, int* CountValidDetect)
 {
-    // Calculate Area for each grid
-    float areas[ROWSIZE] = {0};
-    for (int i = 0; i < ROWSIZE; ++i)
-    {
-        areas[i] = input->reg_pred[i][2] * input->reg_pred[i][3]; // width * height
-    }
+    // Calculate max class and prob for each row
+    float max_clsprob[ROWSIZE] = {0};
+    int max_class_index[ROWSIZE] = {0};
+    max_classpred(input->cls_pred, max_clsprob, max_class_index);
 
-    // Pick good Bboxes
     struct Object candidates[ROWSIZE];
+    // Count good Bboxes
     int CountValidCandid = 0;
-    for (int i = 0; i < ROWSIZE; ++i)
+
+    for (int row_index = 0; row_index < ROWSIZE; ++row_index)
     {
-        if (max_prob[i] > conf_thres)
+        if (max_clsprob[row_index] > CONF_THRESHOLD)
         {
-            struct Bbox box = {input->reg_pred[i][0], input->reg_pred[i][1], input->reg_pred[i][2], input->reg_pred[i][3]};
+            struct Bbox box = {input->reg_pred[row_index][0], input->reg_pred[row_index][1], input->reg_pred[row_index][2], input->reg_pred[row_index][3]};
             // init an Object
-            struct Object obj = {box, i, max_prob[i], &(input->seg_pred[i][0])};
+            struct Object obj = {box, max_class_index[row_index], max_clsprob[row_index], &(input->seg_pred[row_index][0])};
             candidates[CountValidCandid++] = obj;
         }
     }
@@ -140,6 +169,6 @@ static void non_max_suppression_seg(struct Pred_Input *input, float *max_prob, i
 
     // Sort with confidence
     qsort_inplace(candidates, 0, CountValidCandid - 1);
-
-
+    nms_sorted_bboxes(candidates, CountValidCandid, picked_objects, CountValidDetect);
+    return;
 }
