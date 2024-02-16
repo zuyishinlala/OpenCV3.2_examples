@@ -3,7 +3,8 @@
 #include "Object.h"
 #include "Input.h"
 
-static void sigmoid(float (*arr)[NUM_CLASSES], int rowsize, int colsize)
+
+static void sigmoid(int rowsize, int colsize, float arr[rowsize][colsize])
 {
     for (int r = 0; r < rowsize; r++)
     {
@@ -83,15 +84,15 @@ static void post_regpreds(float (*distance)[4], char *type)
     }
 }
 
-static void handle_proto_test()
+static void handle_proto_test(const struct Object* ValidDetections, int NumDetections, float* masks, float* FinalMask)
 {
-    // Resize to the size of trained Image & Obtain Binary Mask
+    // Resize mask & Obtain Binary Mask
     // Matrix Multiplication
 }
 
 static void rescale_mask()
 {
-    // Obtain Original Mask for Orginial Image
+    // Obtain Original Mask for original Image
 }
 
 
@@ -99,24 +100,30 @@ static void xyxy2xywh()
 {
 }
 
+static void xywh2xyxy()
+{
+
+}
+
 int main(int argc, char **argv)
 {
+    char* Bboxtype = "xyxy";
 
     // passed data from npu3
     struct Pred_Input input;
-    float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
-    /*
-    ================================================
-        To-do: Read files and store data into arrays
-    ================================================
-    */
+    float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
 
     // For NMS
-    struct Object ValidDetections[MAX_DETECTIONS];
-    int CountValidDetect = 0;
+    struct Object ValidDetections[MAX_DETECTIONS]; 
+    int NumDetections = 0;
 
-    sigmoid(input.cls_pred, ROWSIZE, NUM_CLASSES);
-    post_regpreds(input.reg_pred, "xywh");
-    // non_max_suppression_seg
+    float Mask[MAX_DETECTIONS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
+    
+    initPredInput(&input, argv);
 
+
+    sigmoid(ROWSIZE, NUM_CLASSES, input.cls_pred);
+    post_regpreds(input.reg_pred, Bboxtype);
+    // non_max_suppression_seg(input, "None", ValidDetections, CountValidDetect);
+    handle_proto_test(ValidDetections, NumDetections, Mask_Input, Mask);  // [:NumDetections] is the output
 }

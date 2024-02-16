@@ -8,8 +8,8 @@
                 "${file}",
                 "-o",
                 "${fileBasenameNoExtension}",
-                "`pkg-config --cflags --libs opencv`",
-                "-lm"
+                //"`pkg-config --cflags --libs opencv`",
+                //"-lm"
             ],
             "options": {
                 "cwd": "${fileDirname}"

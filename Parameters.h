@@ -28,7 +28,7 @@
 #define CONF_THRESHOLD 0.3
 #define NMS_THRESHOLD 0.5
 
-// boolean
+// Bool
 #define AGNOSTIC 0
 #define MULTI_LABEL 0
 #define ISSOLO 0

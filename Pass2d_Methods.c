@@ -43,6 +43,22 @@ void add10_opt5(int (*ptr)[4], int rows, int cols) {
     }
 }
 
+void add10_opt6(int rows, int cols, int arr[rows][cols]) {
+    for (int i = 0; i < rows ; i++) {
+        for(int j = 0 ; j < cols ; j++){
+            arr[i][j] += 10;
+        }
+    }
+}
+
+void add10_opt7(int arr[3][4]) {
+    for (int i = 0; i < 3 ; i++) {
+        for(int j = 0 ; j < 4 ; j++){
+            arr[i][j] += 10;
+        }
+    }
+}
+
 void FindMax(int (*ptr)[4], int* maxele){ // like void max_classpred in ReadFile.c
     for (int i = 0; i < 3 ; i++) {
         int *data = &ptr[i][0];
@@ -63,12 +79,13 @@ int main() {
     int max_ele[3] = {0};
     // Pointer to the first row of the array
     int *ptr = &arr[0][0];
-
+    
     // Get the number of rows and columns
     int rows = sizeof(arr) / sizeof(arr[0]);
     int cols = sizeof(arr[0]) / sizeof(arr[0][0]);
 
-    //add10_opt5(arr, rows, cols);
+    //add10_opt6(rows, cols, arr);
+    add10_opt7(arr);
     FindMax(arr, max_ele);
     for(int i = 0 ; i < 3 ; ++i){
         printf("Max element at row %d is %d\n", i, max_ele[i]);

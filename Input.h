@@ -4,9 +4,9 @@
 
 struct Pred_Input{
     float cls_pred[ROWSIZE][NUM_CLASSES]; // class prob
-    float reg_pred[ROWSIZE][4];           // position: [ROWSIZE][0:2] lt, [ROWSIZE][2:4] br, Stored in stride order: 8, 16, 32
-    float seg_pred[ROWSIZE][NUM_MASKS]; // mask coefficients
+    float reg_pred[ROWSIZE][4];           // Bbox distance. Stored in stride order: 8, 16, 32
+    float seg_pred[ROWSIZE][NUM_MASKS];   // mask coefficients
 };
 
-// void initInput();
+void initPredInput(struct Pred_Input*, char**);
 #endif // OBJECTS_H

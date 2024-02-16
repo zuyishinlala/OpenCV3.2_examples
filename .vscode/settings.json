@@ -12,6 +12,7 @@
         "object.h": "c",
         "highgui.h": "c",
         "limits": "c",
-        "string": "c"
+        "string": "c",
+        "parameters.h": "c"
     }
 }

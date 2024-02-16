@@ -1,7 +1,4 @@
-#include <stdio.h>
 #include "Object.h"
-#include "Parameters.h"
-#include "Input.h"
 
 // ===================================
 // Find Max class probability for each row
@@ -32,9 +29,7 @@ static void max_classpred(float (*cls_pred)[NUM_CLASSES], float *max_predictions
 }
 
 
-// ===================================
-// Qsort all objects by confidence
-// ===================================
+
 static void swap(struct Object *a, struct Object *b)
 {
     struct Object temp = *a;
@@ -42,6 +37,9 @@ static void swap(struct Object *a, struct Object *b)
     *b = temp;
 }
 
+// ===================================
+// Qsort all objects by confidence
+// ===================================
 static void qsort_inplace(struct Object *Objects, int left, int right)
 {
     int i = left;
@@ -71,7 +69,7 @@ static void qsort_inplace(struct Object *Objects, int left, int right)
 }
 
 // ========================================
-// Calculate intersection area
+// Calculate intersection area -- xywh
 // ========================================
 static float intersection_area(const struct Bbox a, const struct Bbox b) {
     float x_overlap = fmax(0, fmin(a.x + a.height / 2, b.x + b.height / 2) - fmax(a.x - a.height / 2, b.x - b.height / 2));
@@ -88,12 +86,9 @@ static void nms_sorted_bboxes(const struct Object* faceobjects, int size, struct
     - For prob in each grids: class prob *=  Obj confidence 
     - Find the max object probability and the class index 
     - Extract boxes with class prob > conf_threshold
-    - Create an array to store output [ NumOfOutputs, 39]
     */
-    if(size == 0){
-        *CountValidDetect = 0;
+    if(size == 0)
         return;
-    }
     int CountValid = 0;
 
     // Calculate areas
@@ -124,7 +119,7 @@ static void nms_sorted_bboxes(const struct Object* faceobjects, int size, struct
 
     // Pick good instances
     for(int row_index = 0 ; row_index < size ; row_index++){
-        if(maxIOU[row_index] < NMS_THRESHOLD) // keep object i
+        if(maxIOU[row_index] < NMS_THRESHOLD) // keep Object i
             picked_object[CountValid++] = faceobjects[row_index];
     }
     *CountValidDetect = CountValid;
@@ -132,7 +127,7 @@ static void nms_sorted_bboxes(const struct Object* faceobjects, int size, struct
 }
 
 
-static void non_max_suppression_seg(struct Pred_Input *input, char *classes, int agnostic, int multi_label, struct Object *picked_objects, int* CountValidDetect)
+static void non_max_suppression_seg(struct Pred_Input *input, char *classes, struct Object *picked_objects, int* CountValidDetect)
 {
     // Calculate max class and prob for each row
     float max_clsprob[ROWSIZE] = {0};
@@ -159,7 +154,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, int
     float time_limit = 10.0f; // quit the function when nms cost time exceed the limit time.
     // multi_label &= NUM_CLASSES > 1;   // multiple labels per box
 
-    if (multi_label)
+    if (MULTI_LABEL)
     { // to-do
     }
 
