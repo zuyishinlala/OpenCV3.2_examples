@@ -2,13 +2,12 @@
 #include <stdlib.h>
 #include <string.h> // Include the string.h header for strtok
 
-#define ROWS 80
-#define COLS 3200
+#define ROWS 99
+#define COLS 99*99
 
 int main() {
     FILE *file;
     char filename[] = "array3D.txt"; // Replace with your file name
-    char line[COLS * 100]; // Assuming each element has at most 2 characters
     int matrix[ROWS][COLS];
     int row = 0, col = 0;
     int value;
@@ -20,7 +19,7 @@ int main() {
         return 1;
     }
     
-    // Read the file line by line
+
     while (fscanf(file, "%d", &value) == 1) {
         matrix[row][col] = value;
         col++;
@@ -32,16 +31,14 @@ int main() {
             }
         }
     }
-    printf("===End===");
     // Close the file
     fclose(file);
-    printf("===Ended===");
     
     // Now you have the contents of the file stored in matrix
 
     // Example usage: printing the matrix
     for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < COLS; j++) {
+        for (int j = 0; j < 100; j++) {
             printf("%d ", matrix[i][j]);
         }
         printf("\n");

@@ -1,8 +1,8 @@
 #include <stdio.h>
 
-#define X_SIZE 80
-#define Y_SIZE 40
-#define Z_SIZE 80
+#define X_SIZE 99
+#define Y_SIZE 99
+#define Z_SIZE 99
 
 int main() {
     // Create a 3D array
@@ -13,7 +13,7 @@ int main() {
         for (int y = 0; y < Y_SIZE; y++) {
             for (int z = 0; z < Z_SIZE; z++) {
                 // Assign some values to the array elements
-                array3D[x][y][z] = x + y + z;
+                array3D[x][y][z] = 10000*x + 100*y + z;
             }
         }
     }
