@@ -6,7 +6,7 @@
 
 // image size 
 #define ORG_SIZE_HEIGHT 500
-#define ORG_SIZE_HEIGHT 500
+#define ORG_SIZE_WIDTH 500
 
 #define TRAINED_SIZE_HEIGHT 384
 #define TRAINED_SIZE_WIDTH 640

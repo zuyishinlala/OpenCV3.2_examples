@@ -67,7 +67,7 @@ static void qsort_inplace(struct Object *Objects, int left, int right)
     if (i < right)
         qsort_inplace(Objects, i, right);
 }
-
+/*
 // ========================================
 // Calculate intersection area -- xywh
 // ========================================
@@ -75,6 +75,16 @@ static float intersection_area(const struct Bbox a, const struct Bbox b) {
     float x_overlap = fmax(0, fmin(a.x + a.height / 2, b.x + b.height / 2) - fmax(a.x - a.height / 2, b.x - b.height / 2));
     float y_overlap = fmax(0, fmin(a.y + a.width / 2, b.y + b.width / 2) - fmax(a.y - a.width / 2, b.y - b.width / 2));
     return x_overlap * y_overlap;
+}
+*/
+
+// ========================================
+// Calculate intersection area -- xyxy(left, top, bottom, right)
+// ========================================
+float intersection_area(struct Bbox box1, struct Bbox box2) {
+    float width = fmin(box1.right, box2.right) - fmax(box1.left, box2.left);
+    float height = fmin(box1.bottom, box2.bottom) - fmax(box1.top, box2.top);
+    return (width < 0 || height < 0) ?  0 : width * height;
 }
 
 // ========================================
@@ -93,15 +103,18 @@ static void nms_sorted_bboxes(const struct Object* faceobjects, int size, struct
 
     // Calculate areas
     float areas[ROWSIZE];
+    /*
     for (int row_index = 0 ; row_index < size ; row_index++) {
         areas[row_index] = (faceobjects[row_index].Rect.width) * (faceobjects[row_index].Rect.height);
     }
-
+    */
+    for (int row_index = 0 ; row_index < size ; row_index++) {
+        areas[row_index] = BoxArea(&faceobjects[row_index].Rect);
+    }
     // ==============================
     // Fast-NMS
     // ==============================
     float maxIOU[ROWSIZE]; // record max value
-
     // Calculate IOU & record max value for every column(dp)
     for(int r = 0 ; r < size ; r++){
         for(int c = r + 1 ; c < size ; c++){

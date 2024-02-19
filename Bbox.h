@@ -2,8 +2,9 @@
 #define BBOX_H
 
 struct Bbox {
-    float x, y, width, height; // center_x, center_y, width, height
+    float left, top, right, bottom;
 };
 
 void xywh2xyxy();
+float BoxArea(struct Bbox* box);
 #endif // BBOX_H

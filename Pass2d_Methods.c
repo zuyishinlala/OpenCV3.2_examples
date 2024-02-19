@@ -70,6 +70,14 @@ void FindMax(int (*ptr)[4], int* maxele){ // like void max_classpred in ReadFile
     }
 }
 
+void access2row(int arr[3][4]){
+    int* ptr = &arr[1][0];
+    for(int i = 0 ; i < 4 ; i++){
+        //*ptr += 10;
+        ptr[i] += 10;
+    }
+}
+
 int main() {
     int arr[3][4] = {
         {1, 2, 3, 4},
@@ -85,11 +93,8 @@ int main() {
     int cols = sizeof(arr[0]) / sizeof(arr[0][0]);
 
     //add10_opt6(rows, cols, arr);
-    add10_opt7(arr);
-    FindMax(arr, max_ele);
-    for(int i = 0 ; i < 3 ; ++i){
-        printf("Max element at row %d is %d\n", i, max_ele[i]);
-    }
+    add10_opt2(ptr, 3, 4);
+    //access2row(arr);
     // Print the modified array
     printf("Modified array:\n");
     for (int i = 0; i < rows; i++) {
