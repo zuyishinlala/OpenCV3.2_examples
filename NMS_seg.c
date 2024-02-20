@@ -99,9 +99,7 @@ static void nms_sorted_bboxes(const struct Object* faceobjects, int size, struct
     */
     if(size == 0)
         return;
-    int CountValid = 0;
-
-    // Calculate areas
+    // Calculated areas
     float areas[ROWSIZE];
     /*
     for (int row_index = 0 ; row_index < size ; row_index++) {
@@ -131,11 +129,10 @@ static void nms_sorted_bboxes(const struct Object* faceobjects, int size, struct
     }
 
     // Pick good instances
-    for(int row_index = 0 ; row_index < size ; row_index++){
+    for(int row_index = 0 ; row_index < size && *CountValidDetect < MAX_DETECTIONS ; row_index++){
         if(maxIOU[row_index] < NMS_THRESHOLD) // keep Object i
-            picked_object[CountValid++] = faceobjects[row_index];
+            picked_object[ *CountValidDetect++] = faceobjects[row_index];
     }
-    *CountValidDetect = CountValid;
     return;
 }
 

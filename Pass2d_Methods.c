@@ -1,5 +1,4 @@
 #include <stdio.h>
-
 void add10(int *ptr, int rows, int cols) {
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
@@ -59,6 +58,12 @@ void add10_opt7(int arr[3][4]) {
     }
 }
 
+void addthirdrow(int ptr[]) {
+    for(int i = 0 ; i < 4 ; ++i, ptr++){
+        *ptr += 50;
+    }
+}
+
 void FindMax(int (*ptr)[4], int* maxele){ // like void max_classpred in ReadFile.c
     for (int i = 0; i < 3 ; i++) {
         int *data = &ptr[i][0];
@@ -93,7 +98,8 @@ int main() {
     int cols = sizeof(arr[0]) / sizeof(arr[0][0]);
 
     //add10_opt6(rows, cols, arr);
-    add10_opt2(ptr, 3, 4);
+    //add10_opt2(ptr, 3, 4);
+    addthirdrow(arr[2]);
     //access2row(arr);
     // Print the modified array
     printf("Modified array:\n");
@@ -103,6 +109,5 @@ int main() {
         }
         printf("\n");
     }
-
     return 0;
 }

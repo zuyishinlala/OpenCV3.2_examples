@@ -6,5 +6,5 @@ struct Bbox {
 };
 
 void xywh2xyxy();
-float BoxArea(struct Bbox* box);
+float BoxArea(const struct Bbox*);
 #endif // BBOX_H

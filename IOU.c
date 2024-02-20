@@ -4,7 +4,7 @@
 #include <math.h>
 int cvRound(double value) {return(ceil(value));}
 
-
+/*
 float intersection_area(const struct Bbox a,const struct Bbox b) {
     float x_overlap = fmax(0, fmin(a.x + a.height / 2, b.x + b.height / 2) - fmax(a.x - a.height / 2, b.x - b.height / 2));
     float y_overlap = fmax(0, fmin(a.y + a.width / 2, b.y + b.width / 2) - fmax(a.y - a.width / 2, b.y - b.width / 2));
@@ -46,3 +46,4 @@ int main() {
     
     return 0;
 }
+*/

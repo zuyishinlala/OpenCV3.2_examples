@@ -80,8 +80,37 @@ static void post_regpreds(float (*distance)[4], char *type)
     }
 }
 
+// Out of Bound return 0, else return real value
+static float GetPixel(int x, int y, int height, int width, float *Src){
+    if(x < 0 || x >= height || y < 0 || y >= width) return 0;
+    else *(Src + y*width + x);
+}
 
-static void handle_proto_test(const struct Object* ValidDetections, const int masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], float (*FinalMask)[TRAINED_SIZE_HEIGHT][TRAINED_SIZE_WIDTH], int NumDetections)
+// Align_Corner = False
+static void BilinearInterpolate(float *Src, float *Tar){
+
+    float r_ratio = MASK_SIZE_HEIGHT / TRAINED_SIZE_HEIGHT;
+    float c_ratio = MASK_SIZE_WIDTH / TRAINED_SIZE_WIDTH;
+
+    int tar_height = TRAINED_SIZE_HEIGHT, tar_width = TRAINED_SIZE_WIDTH;
+    for(int r = 0 ; r < tar_height ; ++r){
+        for(int c = 0 ; c < tar_width ; ++c, ++Tar){
+
+            float dx = (c + 0.5) * c_ratio - 0.5, dy = (r + 0.5) * r_ratio - 0.5;
+
+            int ix = floorf(dx), iy = floorf(dy);
+            dx -= ix;
+            dy -= iy;
+
+            *Tar =         dx *  dy * GetPixel(ix + 1, iy + 1, tar_height, tar_width, Src) + 
+                     (1 - dx) *  dy * GetPixel(ix, iy + 1, tar_height, tar_width, Src)     +
+                      dx * (1 - dy) * GetPixel(ix + 1, iy, tar_height, tar_width, Src)     +
+                (1 - dx) * (1 - dy) * GetPixel(ix, iy, tar_height, tar_width, Src);
+        }
+    }
+}
+
+static void handle_proto_test(const struct Object* ValidDetections, const int masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], int (*FinalMask)[TRAINED_SIZE_HEIGHT][TRAINED_SIZE_WIDTH], int NumDetections)
 {
     // Resize mask & Obtain Binary Mask
     // Matrix Multiplication
@@ -111,7 +140,8 @@ static void handle_proto_test(const struct Object* ValidDetections, const int ma
 
         // Bilinear Interpolate. passed value(org_size, final_size)
         // mask size to trained size
-        
+        BilinearInterpolate(pred_mask, FinalMask[d]);
+
         // Crop Mask (init FinalMask = 0) + Perform Binary Threshold
         float Threshold = 0.5;
         int left = fmax(0, floorf(Detection.Rect.left)), top = fmax(0, floorf(Detection.Rect.top));
@@ -149,12 +179,12 @@ int main(int argc, char **argv)
     struct Pred_Input input;
     float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
 
-    // Result of NMS
+    // Stores result of NMS
     struct Object ValidDetections[MAX_DETECTIONS]; 
     int NumDetections = 0;
 
     int Binary_Mask[MAX_DETECTIONS][TRAINED_SIZE_HEIGHT][TRAINED_SIZE_WIDTH] = {0}; // Binary mask
-    int mask_xyxy[4] = {0}; // the real mask in the resized image. left top bottom right
+    int mask_xyxy[4] = {0};           // the real mask in the resized image. left top bottom right
 
     initPredInput(&input, argv);
 
@@ -165,8 +195,4 @@ int main(int argc, char **argv)
 
     handle_proto_test(ValidDetections, Mask_Input, Binary_Mask, NumDetections);  // [:NumDetections] is the output
     getMaskxyxy(mask_xyxy);
-    for(int i = 0 ; i < NumDetections ; ++i){
-        // resize mask by using openCV
-        
-    }
 }
