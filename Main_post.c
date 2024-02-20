@@ -80,32 +80,34 @@ static void post_regpreds(float (*distance)[4], char *type)
     }
 }
 
-// Out of Bound return 0, else return real value
-static float GetPixel(int x, int y, int height, int width, float *Src){
-    if(x < 0 || x >= height || y < 0 || y >= width) return 0;
-    else *(Src + y*width + x);
+static float GetPixel(int x, int y, int width, int height, float *Src){
+    if(x < 0 || x >= width || y < 0 || y >= height) return 0.f;
+    return *(Src + y*width + x);
 }
 
-// Align_Corner = False
 static void BilinearInterpolate(float *Src, float *Tar){
 
-    float r_ratio = MASK_SIZE_HEIGHT / TRAINED_SIZE_HEIGHT;
-    float c_ratio = MASK_SIZE_WIDTH / TRAINED_SIZE_WIDTH;
+    float tar_width = TRAINED_SIZE_WIDTH, tar_height = TRAINED_SIZE_HEIGHT;
+    float src_width = ORG_SIZE_WIDTH, src_height = ORG_SIZE_HEIGHT;
 
-    int tar_height = TRAINED_SIZE_HEIGHT, tar_width = TRAINED_SIZE_WIDTH;
+    float r_ratio = src_height / tar_height;
+    float c_ratio = src_width / tar_width;
+    
     for(int r = 0 ; r < tar_height ; ++r){
         for(int c = 0 ; c < tar_width ; ++c, ++Tar){
 
-            float dx = (c + 0.5) * c_ratio - 0.5, dy = (r + 0.5) * r_ratio - 0.5;
+            float dc = (c + 0.5) * c_ratio - 0.5;
+            float dr = (r + 0.5) * r_ratio - 0.5;
 
-            int ix = floorf(dx), iy = floorf(dy);
-            dx -= ix;
-            dy -= iy;
+            int ic = floorf(dc), ir = floorf(dr);
 
-            *Tar =         dx *  dy * GetPixel(ix + 1, iy + 1, tar_height, tar_width, Src) + 
-                     (1 - dx) *  dy * GetPixel(ix, iy + 1, tar_height, tar_width, Src)     +
-                      dx * (1 - dy) * GetPixel(ix + 1, iy, tar_height, tar_width, Src)     +
-                (1 - dx) * (1 - dy) * GetPixel(ix, iy, tar_height, tar_width, Src);
+            dr = (dr < 0.f) ? 1.0f : ((dr > src_height - 1.0f) ? 0.f : dr - ir);
+            dc = (dc < 0.f) ? 1.0f : ((dc > src_width - 1.0f) ? 0.f : dc - ic);
+
+            *Tar =         dc *  dr * GetPixel(ic + 1, ir + 1, src_height, src_width, Src) + 
+                     (1 - dc) *  dr * GetPixel(    ic, ir + 1, src_height, src_width, Src) +
+                      dc * (1 - dr) * GetPixel(ic + 1,     ir, src_height, src_width, Src) +
+                (1 - dc) * (1 - dr) * GetPixel(    ic,     ir, src_height, src_width, Src);
         }
     }
 }
