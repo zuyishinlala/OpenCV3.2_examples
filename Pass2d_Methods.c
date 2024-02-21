@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include "Input.h"
+
 void add10(int *ptr, int rows, int cols) {
     for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {

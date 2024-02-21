@@ -1,5 +1,7 @@
 #ifndef INPUTS_H
 #define INPUTS_H
+#include <stdio.h>
+#include <stdlib.h>
 #include "Parameters.h"
 
 struct Pred_Input{
@@ -9,4 +11,5 @@ struct Pred_Input{
 };
 
 void initPredInput(struct Pred_Input*, char**);
+void ReadFile(float*, int , int ,  char* );
 #endif // OBJECTS_H
