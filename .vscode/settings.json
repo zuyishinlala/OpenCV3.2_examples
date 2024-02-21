@@ -13,6 +13,7 @@
         "highgui.h": "c",
         "limits": "c",
         "string": "c",
-        "parameters.h": "c"
+        "parameters.h": "c",
+        "bbox.h": "c"
     }
 }

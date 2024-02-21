@@ -1,7 +1,7 @@
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
 
-#define NUM_CLASSES 80
+#define NUM_CLASSES 30
 #define NUM_MASKS 32
 
 // image size 

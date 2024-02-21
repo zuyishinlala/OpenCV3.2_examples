@@ -2,26 +2,27 @@
 #include <stdio.h>
 #include <opencv/cxcore.h>
 #include <math.h>
-#include<opencv2/imgcodecs/imgcodecs_c.h>
-#include<opencv/cv.h>
-#include<opencv/highgui.h>
+#include <opencv2/imgcodecs/imgcodecs_c.h>
+#include <opencv/cv.h>
+#include <opencv/highgui.h>
 int cvRound(double value) {return(ceil(value));}
 #define ROW 500
 #define COL 200
 int main() {
     // Example float 2D array
-    float data [ROW * COL] = {0};
+    uint8_t data [ROW * COL] = {0};
     
     for(int row = 50 ; row < ROW ; ++row){
         for(int col = 0 ; col < COL ; ++col){
-            data[row*COL + col] = 0.8f;
+            data[row*COL + col] = 255;
         }
     }
-    CvMat m = cvMat(ROW, COL, CV_32FC1, data);
+    CvMat m = cvMat(ROW, COL, CV_8UC1, data);
 
     // Creates a buffer, no data inside. MUST need to initalize data
     IplImage* img = cvCreateImageHeader(cvSize(0, 0), 32, 3); 
     cvGetImage(&m, img);
+
     printf("Image Size %d %d", img->width, img->height);
     printf("Image Channel %d", img->nChannels);
 
@@ -41,5 +42,6 @@ int main() {
 
     //cvReleaseImage(&buff);
     cvReleaseImage(&img);
+    cvReleaseMat(&m);
     return 0;
 }

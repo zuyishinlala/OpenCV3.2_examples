@@ -1,8 +1,17 @@
 #include <stdio.h>
-#include <math.h>
+
+#include <opencv/cv.h>
+#include <opencv/cxcore.h>
+#include <opencv2/imgcodecs/imgcodecs_c.h>
+#include <opencv/cv.h>
+#include <opencv/highgui.h>
+
 #include "Object.h"
 #include "Input.h"
 #include "Bbox.h"
+
+#include <math.h>
+int cvRound(double value) {return(ceil(value));}
 
 static void sigmoid(int rowsize, int colsize, float *ptr)
 {
@@ -72,29 +81,32 @@ static float GetPixel(int x, int y, int width, int height, float *Src){
 }
 
 //Align Corner = False
-static void BilinearInterpolate(float *Src, float *Tar){
+static void GetFinalMask(float *Src, uint8_t *Tar, float Threshold, struct Bbox Rect){
 
-    float tar_width = TRAINED_SIZE_WIDTH, tar_height = TRAINED_SIZE_HEIGHT;
-    float src_width = ORG_SIZE_WIDTH, src_height = ORG_SIZE_HEIGHT;
+    float src_width = TRAINED_SIZE_WIDTH, src_height = TRAINED_SIZE_HEIGHT;
+    float tar_width = ORG_SIZE_WIDTH, tar_height = ORG_SIZE_HEIGHT;
 
     float r_ratio = src_height / tar_height;
     float c_ratio = src_width / tar_width;
     
-    for(int r = 0 ; r < tar_height ; ++r){
-        for(int c = 0 ; c < tar_width ; ++c, ++Tar){
+    // Perform Binary Threshold only in the Bounding Box Region
+    for(int r = Rect.top ; r < Rect.bottom ; ++r){
+        for(int c = Rect.left ; c < Rect.right ; ++c, ++Tar){
+            float PixelSum = 0.f;
 
             float dc = (c + 0.5) * c_ratio - 0.5;
             float dr = (r + 0.5) * r_ratio - 0.5;
-
             int ic = floorf(dc), ir = floorf(dr);
 
             dr = (dr < 0.f) ? 1.0f : ((dr > src_height - 1.0f) ? 0.f : dr - ir);
             dc = (dc < 0.f) ? 1.0f : ((dc > src_width - 1.0f) ? 0.f : dc - ic);
 
-            *Tar =         dc *  dr * GetPixel(ic + 1, ir + 1, src_height, src_width, Src) + 
+            PixelSum =     dc *  dr * GetPixel(ic + 1, ir + 1, src_height, src_width, Src) + 
                      (1 - dc) *  dr * GetPixel(    ic, ir + 1, src_height, src_width, Src) +
                       dc * (1 - dr) * GetPixel(ic + 1,     ir, src_height, src_width, Src) +
                 (1 - dc) * (1 - dr) * GetPixel(    ic,     ir, src_height, src_width, Src);
+            
+            *Tar = PixelSum > Threshold ? 255 : 0;
         }
     }
 }
@@ -111,34 +123,31 @@ static void handle_proto_test(const struct Object* ValidDetections, const float 
     - crop mask 
     - binary threshold
     */
-    float FinalMask[TRAINED_SIZE_HEIGHT][TRAINED_SIZE_WIDTH] = {0};
+    float Binary_Thres = 0.5;
     for(int d = 0 ; d < NumDetections ; ++d){
         float* maskcoeffs = ValidDetections[d].maskcoeff;
         float pred_mask[MASK_SIZE_HEIGHT][MASK_SIZE_WIDTH] = {0};
         float* mask_ptr = &pred_mask[0][0];
-
-        printf("%d Prediction\n", d);
-
+        uint8_t FinalMask[TRAINED_SIZE_HEIGHT][TRAINED_SIZE_WIDTH] = {0};
         // Matrix Multiplication
-        for(int i = 0 ; i < MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH ; ++i, ++mask_ptr){
+        for(int i = 0 ; i < MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH ; ++i, ++mask_ptr){
+            float Pixel = 0.f;
             for(int c = 0 ; c < NUM_MASKS ; ++c){
-                *mask_ptr += maskcoeffs[c] * masks[c][i];
+                Pixel += maskcoeffs[c] * masks[c][i];
             }
+            *mask_ptr = Pixel;
         }
-        
-        printf("Performed Matrix Multiplication on Detection %d\n", d);
-
         sigmoid(MASK_SIZE_HEIGHT, MASK_SIZE_WIDTH, &pred_mask[0][0]);
         
-        // Bilinear Interpolate. passed value(org_size, final_size)
-        // mask size to trained size
-        BilinearInterpolate(&pred_mask[0][0], &FinalMask[0][0]);
-
-        // Crop Mask (init FinalMask = 0) + Perform Binary Threshold
-        float Threshold = 0.5;
+        // Crop Mask
         struct Bbox box = ValidDetections[d].Rect;
         int left = fmax(0, floorf(box.left)), top = fmax(0, floorf(box.top));
         int right = fmin(TRAINED_SIZE_WIDTH, ceilf(box.right)), bottom = fmin(TRAINED_SIZE_HEIGHT, ceilf(box.right));
+
+        struct Bbox Bound = {left, top, right, bottom};
+
+        // Bilinear Interpolate + Binary Threshold 
+        GetFinalMask(&pred_mask[0][0], &FinalMask[0][0], Binary_Thres, Bound);
     }
 }
 
@@ -183,8 +192,6 @@ static void max_classpred(float (*cls_pred)[NUM_CLASSES], float *max_predictions
     }
     return;
 }
-
-
 
 static void swap(struct Object *a, struct Object *b)
 {
@@ -268,7 +275,7 @@ static void nms_sorted_bboxes(const struct Object* faceobjects, int size, struct
     // ==============================
     // Fast-NMS
     // ==============================
-    float maxIOU[ROWSIZE]; // record max value
+    float maxIOU[ROWSIZE] = {0.f}; // record max value
     // Calculate IOU & record max value for every column(dp)
     for(int r = 0 ; r < size ; r++){
         for(int c = r + 1 ; c < size ; c++){
@@ -287,13 +294,13 @@ static void nms_sorted_bboxes(const struct Object* faceobjects, int size, struct
     // Pick good instances
     for(int row_index = 0 ; row_index < size && *CountValidDetect < MAX_DETECTIONS ; row_index++){
         if(maxIOU[row_index] < NMS_THRESHOLD) // keep Object i
-            picked_object[ *CountValidDetect++] = faceobjects[row_index];
+            picked_object[ (*CountValidDetect)++] = faceobjects[row_index];
     }
     return;
 }
 
 
-static void non_max_suppression_seg(struct Pred_Input *input, char *classes, struct Object *picked_objects, int* CountValidDetect)
+static void non_max_suppression_seg(struct Pred_Input *input, char *classes, struct Object *picked_objects, int* CountValidDetect, float conf_threshold)
 {
     // Calculate max class and prob for each row
     float max_clsprob[ROWSIZE] = {0};
@@ -306,7 +313,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
 
     for (int row_index = 0; row_index < ROWSIZE; ++row_index)
     {
-        if (max_clsprob[row_index] > CONF_THRESHOLD)
+        if (max_clsprob[row_index] > conf_threshold)
         {
             struct Bbox box = {input->reg_pred[row_index][0], input->reg_pred[row_index][1], input->reg_pred[row_index][2], input->reg_pred[row_index][3]};
             // init an Object
@@ -314,7 +321,8 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
             candidates[CountValidCandid++] = obj;
         }
     }
-    return;
+
+    printf("%d Candidates...\n", CountValidCandid);
     int max_wh = 4096;        // maximum box width and height
     int max_nms = 30000;      // maximum number of boxes put into torchvision.ops.nms()
     float time_limit = 10.0f; // quit the function when nms cost time exceed the limit time.
@@ -334,38 +342,52 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     return;
 }
 
+static void CheckImage(char* ImgName, IplImage** Dst){
+    IplImage* img = cvLoadImage( ImgName, CV_LOAD_IMAGE_COLOR);
+    if(!img){
+        printf("---No Img---");
+        return;
+    }
+    cvResize(img, *Dst, CV_INTER_LINEAR);
+    cvReleaseImage(&img);
+}
+
 int main(int argc, char **argv)
 {
+    IplImage* OrgImg = cvLoadImage( argv[1], CV_LOAD_IMAGE_COLOR);
+     if(!OrgImg){
+        printf("---No Img---\n");
+        return;
+    }
     char* Bboxtype = "xyxy";
-
+    
     // passed data from npu
     struct Pred_Input input;
     float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
 
-    // Stores result of NMS
-
+    // Read Inputs
     initPredInput(&input, argv);
-    printf("=====Finished Reading Prediction Input=====\n");
     
     sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
-    printf("Performed Sigmoid on cls_pred\n");
 
     post_regpreds(input.reg_pred, Bboxtype);
-    printf("Performed Post_RegPreds on reg_preds\n");
+    printf("Post_RegPredictions on reg_preds Done\n");
 
+    // Recorded Detections for NMS
     struct Object ValidDetections[MAX_DETECTIONS]; 
-    int NumDetections = 5;
+    int NumDetections = 0;
 
-    non_max_suppression_seg(&input, "None", ValidDetections, &NumDetections);
-    printf("Performed NMS\n");
+    float arr[MAX_DETECTIONS][32] = {0};
+
+    non_max_suppression_seg(&input, "None", ValidDetections, &NumDetections, CONF_THRESHOLD);
+    printf("NMS Done,Got %d Detections...\n", NumDetections);
 
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
-    printf("Initialized Binary Mask\n");
-
-    handle_proto_test(ValidDetections, Mask_Input, NumDetections);  // [:NumDetections] is the output
-    //printf("Performed handle_proto_test for all predicitons\n");
-
-    /*
     getMaskxyxy(mask_xyxy, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, ORG_SIZE_WIDTH, ORG_SIZE_HEIGHT);
-    */
+    printf("Got xyxy of masks\n");
+
+    handle_proto_test(ValidDetections, Mask_Input, NumDetections);  //[:NumDetections] is the output
+    printf("Handled_proto_test for %d predicitons\n", NumDetections);
+
+    cvReleaseImage(&OrgImg);
 }

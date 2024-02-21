@@ -20,7 +20,29 @@ void ReadFile(float* Dst, int RowSize, int ColSize,  char* FileName){
 
 void initPredInput(struct Pred_Input* input, char** argv){
     printf("=====Reading Prediction Input...   =====\n");
+    
+    for (int i = 0; i < ROWSIZE; ++i) {
+        for (int j = 0; j < NUM_CLASSES; ++j) {
+            input->cls_pred[i][j] = 0.01f;
+        }
+    }
+
+    // Initialize reg_pred
+    for (int i = 0; i < ROWSIZE; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            input->reg_pred[i][j] = 1.0f;
+        }
+    }
+
+    // Initialize seg_pred
+    for (int i = 0; i < ROWSIZE; ++i) {
+        for (int j = 0; j < NUM_MASKS; ++j) {
+            input->seg_pred[i][j] = 1.0f;
+        }
+    }
+    printf("Read File Ended\n");
     return;
+
     float* cls_ptr = &input->cls_pred[0][0];
     float* reg_ptr = &input->reg_pred[0][0];
     float* seg_ptr = &input->seg_pred[0][0];
