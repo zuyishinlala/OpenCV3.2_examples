@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "Para.h"
 
-#define ROWS 99*99 // 80*40
-#define COLS 99
+#define ROWS Y_SIZE*Z_SIZE 
+#define COLS X_SIZE
 
+// Similiar to what we use !!!!!!!!!!
 int main() {
     FILE *file;
     char filename[] = "array3D.txt"; // Replace with your file name
@@ -17,8 +19,9 @@ int main() {
         printf("Error opening file %s\n", filename);
         return 1;
     }
-
+    int*ptr = &array[0][0];
     // Read the file and store values in the array
+    /*
     while (fscanf(file, "%d", &value) == 1) {
         array[row][col] = value;
         row++;
@@ -30,7 +33,12 @@ int main() {
             }
         }
     }
-
+    */
+    for(int c = 0 ; c < COLS ; ++c){
+        for(int r = 0 ; r < ROWS ; ++r){
+            fscanf(file, "%d", ptr+r*COLS+c);
+        }
+    }
     // Close the file
     fclose(file);
 

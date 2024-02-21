@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h> // Include the string.h header for strtok
+#include "Para.h"
 
-#define ROWS 99
-#define COLS 99*99
+#define ROWS X_SIZE
+#define COLS Y_SIZE * Z_SIZE
 
 int main() {
     FILE *file;

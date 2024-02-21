@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
     // Copy array B into array A starting at row index 5
     copyArray(A + 3, B, 0, 3, 3);
 
-    Add10(A);
+    //Add10(A);
     // Printing array A
     printf("Array A after copying array B into it:\n");
     for (int i = 0; i < 5; i++) {
@@ -43,8 +43,6 @@ int main(int argc, char** argv) {
     int arr[3] = {5,6,7};
     int* ptr;
     ptr = arr;
-    printf("%p\n", &arr);
-    printf("Memory address pointed to by ptr: %p\n", (void *)ptr);
     return 0;
 }
 /*

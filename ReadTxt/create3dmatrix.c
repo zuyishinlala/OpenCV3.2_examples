@@ -1,9 +1,5 @@
 #include <stdio.h>
-
-#define X_SIZE 99
-#define Y_SIZE 99
-#define Z_SIZE 99
-
+#include "Para.h"
 int main() {
     // Create a 3D array
     int array3D[X_SIZE][Y_SIZE][Z_SIZE];

@@ -17,41 +17,25 @@ static void post_regpreds(float (*distance)[4], char *type)
     // dist2bbox & generate_anchor in YOLOv6
     int row = 0;
     float stride = 8.f;
+    float row_bound = HEIGHT0, col_bound = WIDTH0;
     for (int stride_index = 0; stride_index < 3; ++stride_index)
     {
-        float row_bound, col_bound;
-        switch (stride_index)
-        {
-        case 0:
-            row_bound = HEIGHT0;
-            col_bound = WIDTH0;
-            break;
-        case 1:
-            row_bound = HEIGHT1;
-            col_bound = WIDTH1;
-            break;
-        case 2:
-            row_bound = HEIGHT2;
-            col_bound = WIDTH2;
-            break;
-        default:
-            printf("stride_index out of bound\n");
-            return;
-        }
         for (float anchor_points_r = 0.5; anchor_points_r < row_bound; ++anchor_points_r)
         {
             for (float anchor_points_c = 0.5; anchor_points_c < col_bound; ++anchor_points_c)
             {
-                // lt, rb = torch.split(distance, 2, -1)
-                // no need to perform
                 float *data = &distance[row][0]; // left, top, right, bottom
+
+                // lt, rb = torch.split(distance, 2, -1)
 
                 // x1y1 = anchor_points - lt
                 data[0] = anchor_points_c - data[0];
                 data[1] = anchor_points_r - data[1];
+
                 // x2y2 = anchor_points + rb
                 data[2] += anchor_points_c; // anchor_points_c + data[2]
                 data[3] += anchor_points_r; // anchor_points_r + data[3]
+                
                 ++row;
             }
         }
@@ -76,6 +60,8 @@ static void post_regpreds(float (*distance)[4], char *type)
                 distance[i][j] *= stride;
             }
         }
+        row_bound /= 2;
+        col_bound /= 2;
         stride *= 2;
     }
 }
@@ -85,6 +71,7 @@ static float GetPixel(int x, int y, int width, int height, float *Src){
     return *(Src + y*width + x);
 }
 
+//Align Corner = False
 static void BilinearInterpolate(float *Src, float *Tar){
 
     float tar_width = TRAINED_SIZE_WIDTH, tar_height = TRAINED_SIZE_HEIGHT;
@@ -112,7 +99,7 @@ static void BilinearInterpolate(float *Src, float *Tar){
     }
 }
 
-static void handle_proto_test(const struct Object* ValidDetections, const int masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], int (*FinalMask)[TRAINED_SIZE_HEIGHT][TRAINED_SIZE_WIDTH], int NumDetections)
+static void handle_proto_test(const struct Object* ValidDetections, const int masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], float (*FinalMask)[TRAINED_SIZE_HEIGHT][TRAINED_SIZE_WIDTH], int NumDetections)
 {
     // Resize mask & Obtain Binary Mask
     // Matrix Multiplication
@@ -127,22 +114,22 @@ static void handle_proto_test(const struct Object* ValidDetections, const int ma
     for(int d = 0 ; d < NumDetections ; ++d){
         const struct Object Detection = ValidDetections[d];
 
-        float *maskcoeffs = Detection.maskcoeff;
+        float* maskcoeffs = Detection.maskcoeff;
         float pred_mask[MASK_SIZE_HEIGHT][MASK_SIZE_WIDTH] = {0};
-        float* ptr = &pred_mask[0][0];
+        float* mask_ptr = &pred_mask[0][0];
 
         // Matrix Multiplication
-        for(int i = 0 ; i < MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH ; ++i, ++ptr){
+        for(int i = 0 ; i < MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH ; ++i, ++mask_ptr){
             for(int c = 0 ; c < NUM_MASKS ; ++c){
-                *ptr += maskcoeffs[c] * masks[c][i];
+                *mask_ptr += maskcoeffs[c] * masks[c][i];
             }
         }
 
-        sigmoid(MASK_SIZE_HEIGHT, MASK_SIZE_WIDTH, pred_mask);
-
+        sigmoid(MASK_SIZE_HEIGHT, MASK_SIZE_WIDTH, &pred_mask[0][0]);
+        
         // Bilinear Interpolate. passed value(org_size, final_size)
         // mask size to trained size
-        BilinearInterpolate(pred_mask, FinalMask[d]);
+        BilinearInterpolate(&pred_mask[0][0], &FinalMask[d][0][0]);
 
         // Crop Mask (init FinalMask = 0) + Perform Binary Threshold
         float Threshold = 0.5;
@@ -159,13 +146,13 @@ static void handle_proto_test(const struct Object* ValidDetections, const int ma
     }
 }
 
-static inline void getMaskxyxy(int* xyxy){
-    float ratio = fminf( TRAINED_SIZE_HEIGHT/ORG_SIZE_HEIGHT, TRAINED_SIZE_WIDTH/ORG_SIZE_WIDTH);
-    int padding_h = (TRAINED_SIZE_HEIGHT - ORG_SIZE_HEIGHT * ratio) / 2, padding_w = (TRAINED_SIZE_WIDTH - ORG_SIZE_WIDTH * ratio) / 2;
-    xyxy[0] = padding_w; // left
-    xyxy[1] = padding_h; // top
-    xyxy[2] = ORG_SIZE_HEIGHT - padding_w; // right
-    xyxy[3] = ORG_SIZE_WIDTH - padding_h; // bottom
+static inline void getMaskxyxy(int* xyxy, float org_size_w, float org_size_h, float tar_size_w, float tar_size_h){
+    float ratio = fminf( org_size_w/tar_size_w, org_size_h/tar_size_h);
+    int padding_w = (org_size_w - tar_size_w * ratio) / 2, padding_h = (org_size_h - tar_size_h * ratio) / 2;
+    xyxy[0] = padding_w;              // left
+    xyxy[1] = padding_h;              // top
+    xyxy[2] = org_size_w - padding_w; // right
+    xyxy[3] = org_size_h - padding_h; // bottom
     return;
 }
 
@@ -185,16 +172,16 @@ int main(int argc, char **argv)
     struct Object ValidDetections[MAX_DETECTIONS]; 
     int NumDetections = 0;
 
-    int Binary_Mask[MAX_DETECTIONS][TRAINED_SIZE_HEIGHT][TRAINED_SIZE_WIDTH] = {0}; // Binary mask
-    int mask_xyxy[4] = {0};           // the real mask in the resized image. left top bottom right
+    float Binary_Mask[MAX_DETECTIONS][TRAINED_SIZE_HEIGHT][TRAINED_SIZE_WIDTH] = {0}; // Binary mask
+    int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
 
     initPredInput(&input, argv);
 
-    sigmoid(ROWSIZE, NUM_CLASSES, input.cls_pred);
+    sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
     post_regpreds(input.reg_pred, Bboxtype);
 
     //non_max_suppression_seg(input, "None", ValidDetections, &NumDetections);
 
     handle_proto_test(ValidDetections, Mask_Input, Binary_Mask, NumDetections);  // [:NumDetections] is the output
-    getMaskxyxy(mask_xyxy);
+    getMaskxyxy(mask_xyxy, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, ORG_SIZE_WIDTH, ORG_SIZE_HEIGHT);
 }
