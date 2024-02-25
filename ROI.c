@@ -14,7 +14,7 @@ int main(int argc,char** argv) {
     }
 
     // Define the region of interest (ROI) coordinates
-    CvRect roiRect = cvRect(100, 100, 200, 150); // (x, y, width, height)
+    CvRect roiRect = cvRect(100, 100, 200, 150); // (x(left), y(top), width, height)
 
     // Create an ROI (region of interest) from the original image
     cvSetImageROI(image, roiRect);
