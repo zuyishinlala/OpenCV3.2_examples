@@ -34,4 +34,7 @@
 #define ISSOLO 0
 #define ANCHOR_BASED 0
 
+// OpenCV parameters for drawing
+#define MASK_TRANSPARENCY 0.2 // 0 to 1
+
 #endif

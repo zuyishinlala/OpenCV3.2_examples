@@ -5,6 +5,6 @@ struct Bbox {
     float left, top, right, bottom;
 };
 
-void xywh2xyxy();
 float BoxArea(const struct Bbox*);
+void clamp(struct Bbox*, float , float );
 #endif // BBOX_H

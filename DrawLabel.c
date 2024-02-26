@@ -13,7 +13,7 @@ void draw_label(IplImage* input_image, const char* label, int left, int top)
     CvPoint tlc, brc;
     // Create Font
     CvFont font;
-    cvInitFont(&font, CV_FONT_HERSHEY_SIMPLEX, 0.5, 0.8, 0, 2, CV_AA);
+    cvInitFont(&font, CV_FONT_HERSHEY_COMPLEX, 0.5, 0.8, 0, 2, CV_AA);
 
     CvScalar BLACK = CV_RGB(0, 0, 0);
     CvScalar BLUE = CV_RGB(50, 178, 255);
@@ -21,7 +21,8 @@ void draw_label(IplImage* input_image, const char* label, int left, int top)
 
     cvGetTextSize(label, &font, &label_size, &baseLine);
     //top = max(top, label_size->height);
-    top = (label_size.height > top) ? label_size.height : top;
+    
+    //top = (label_size.height > top) ? label_size.height : top;
     // Top left corner.
     tlc = cvPoint(left, top);
     // Bottom right corner.
@@ -41,19 +42,19 @@ int main(int argc, char** argv){
         printf("---No Img---");
         return 0;
     }
-    /*
-    CvPoint startPointV = cvPoint(100, 0);
-    CvPoint endPointV = cvPoint(100, 500);
+    
+    CvPoint startPointV = cvPoint(110, 0);
+    CvPoint endPointV = cvPoint(110, 500);
     cvLine(img, startPointV, endPointV, CV_RGB(200, 0, 0), 2, CV_AA, 0);
 
-    CvPoint startPointH = cvPoint(0, 100);
-    CvPoint endPointH = cvPoint(500, 100);
+    CvPoint startPointH = cvPoint(0, 40);
+    CvPoint endPointH = cvPoint(500, 40);
     cvLine(img, startPointH, endPointH, CV_RGB(200, 0, 0), 2, CV_AA, 0);
-    */  
+
     CvScalar BLUE = CV_RGB(50, 178, 255);
 
-    CvPoint tlp = cvPoint(110, 40);
-    CvPoint brp = cvPoint(430, 360);
+    CvPoint tlp = cvPoint(0, 0);
+    CvPoint brp = cvPoint(200, 200);
     cvRectangle(img, tlp, brp, BLUE, 2, CV_AA, 0);
     const char* str = "Sun Flower";
     // para(110, 40) is the top left of every Label

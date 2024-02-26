@@ -6,9 +6,9 @@
 #include "Bbox.h"
 
 struct Object {
-    struct Bbox Rect;               // Bounding Box 4
-    int label;                      // Classification label 1
-    float conf;                     // Classification max prob score 1
+    struct Bbox Rect;               // Bounding Box
+    int label;                      // Classification label
+    float conf;                     // Classification max prob score
     float* maskcoeff;               // 32
 };
 
