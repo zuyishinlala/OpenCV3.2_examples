@@ -62,7 +62,6 @@ static void post_regpreds(float (*distance)[4], char *type)
                 distance[i][3] = (y2 - y1);     // height
             }
         }
-        // pred_bboxes *= stride_tensor
         for (int i = 0; i < ROWSIZE; ++i)
         {
             for (int j = 0; j < 4; ++j)
@@ -82,17 +81,17 @@ static float GetPixel(int x, int y, int width, int height, float *Src){
 }
 
 //Align Corner = False
-static void GetUncropedMask(float *Src, uint8_t *Tar, float Threshold, struct Bbox Rect){
+static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struct Bbox Bound, CvSize OrgImgSize){
 
     float src_width = TRAINED_SIZE_WIDTH, src_height = TRAINED_SIZE_HEIGHT;
-    float tar_width = ORG_SIZE_WIDTH, tar_height = ORG_SIZE_HEIGHT;
+    float tar_width = OrgImgSize.width, tar_height = OrgImgSize.height;
 
     float r_ratio = src_height / tar_height;
     float c_ratio = src_width / tar_width;
     
     // Perform Binary Threshold only in the Bounding Box Region
-    for(int r = Rect.top ; r < Rect.bottom ; ++r){
-        for(int c = Rect.left ; c < Rect.right ; ++c, ++Tar){
+    for(int r = Bound.top ; r < Bound.bottom ; ++r){
+        for(int c = Bound.left ; c < Bound.right ; ++c, ++Tar){
             float PixelSum = 0.f;
 
             float dr = (r + 0.5) * r_ratio - 0.5;
@@ -107,12 +106,12 @@ static void GetUncropedMask(float *Src, uint8_t *Tar, float Threshold, struct Bb
                       dc * (1 - dr) * GetPixel(ic + 1,     ir, src_height, src_width, Src) +
                 (1 - dc) * (1 - dr) * GetPixel(    ic,     ir, src_height, src_width, Src);
             
-            *Tar = PixelSum > Threshold ? 255 : 0;
+            *Tar = PixelSum > Threshold ? 1.0f : 0.f;
         }
     }
 }
 
-static void handle_proto_test(const struct Object* ValidDetections, const float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], int NumDetections,  uint8_t (* UnCropedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH])
+static void handle_proto_test(const struct Object* ValidDetections, const float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], int NumDetections,  uint8_t (* UnCropedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], CvSize OrgImg_Size)
 {
     // Resize mask & Obtain Binary Mask
     // Matrix Multiplication
@@ -148,7 +147,7 @@ static void handle_proto_test(const struct Object* ValidDetections, const float 
         struct Bbox Bound = {left, top, right, bottom};
 
         // Bilinear Interpolate + Binary Threshold 
-        GetUncropedMask(&pred_mask[0][0], &UnCropedMask[d][0], Binary_Thres, Bound);
+        BilinearInterpolate(&pred_mask[0][0], &UnCropedMask[d][0], Binary_Thres, Bound, OrgImg_Size);
     }
 }
 
@@ -296,8 +295,14 @@ static void nms_sorted_bboxes(const struct Object* faceobjects, int size, struct
     return;
 }
 
-static void GetOnlyClass(char* className, int CountValidCandid,struct Object* candidates){
-
+static void GetOnlyClass(char* className, int *Candid, struct Object* candidates){
+    int ValidCandid = 0;
+    for(int i = 0 ; i < *Candid ; ++i){
+        if(!strcmp(candidates[i].label, className)){   // If same
+            swap(&candidates[i], &candidates[ValidCandid++]);
+        }
+    }
+    *Candid = ValidCandid;
 }
 
 static void non_max_suppression_seg(struct Pred_Input *input, char *classes, struct Object *picked_objects, int* CountValidDetect, float conf_threshold)
@@ -395,9 +400,11 @@ static void plot_box_and_label(const int* label, const struct Bbox* box, float m
     CvScalar BLUE = CV_RGB(50, 178, 255);
     CvScalar WHITE = CV_RGB(240, 240, 240);
 
+    IplImage* MaskedImg = cvCloneImage(*ImgSrc);
+    cvSet(MaskedImg, CV_RGB(0, 0, 255), *mask); //Specify the color
+
     // Draw Mask
-    cvSet(*ImgSrc, BLUE, *mask);
-    cvAddWeighted(*ImgSrc, 1.f - mask_transparency, *mask, mask_transparency, 0, *ImgSrc);
+    cvAddWeighted(*ImgSrc, 1.f - mask_transparency, MaskedImg, mask_transparency, 0, *ImgSrc);
 
     // Draw Bounding Box
     CvPoint tlp = cvPoint(box->left, box->top);
@@ -414,6 +421,7 @@ static void plot_box_and_label(const int* label, const struct Bbox* box, float m
     brp = cvPoint(box->left + label_size.width, box->top + label_size.height + baseLine);
     cvRectangle(*ImgSrc, tlp, brp, BLUE, CV_FILLED, CV_AA, 0);
     cvPutText(*ImgSrc, label, cvPoint(box->left, box->top + label_size.height), &font, WHITE);
+    cvReleaseImage(&MaskedImg);
 }
 
 
@@ -425,26 +433,25 @@ static void RescaleMaskandDrawLabel(const struct Object *Detections, int NumDete
     Draw Label
     */
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
-    getMaskxyxy(mask_xyxy, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, ORG_SIZE_WIDTH, ORG_SIZE_HEIGHT);
+    getMaskxyxy(mask_xyxy, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*ImgSrc)->width, (*ImgSrc)->height);
 
     for(int i = 0 ; i < NumDetections ; ++i){
 
-        // UNIT8 array to IplImage
+        // float32 array to IplImage
         IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
-        cvSetData(SrcMask, UnCropedMask[i][0], SrcMask->widthStep);
+        cvSetData(SrcMask, UnCropedMask[i], SrcMask->widthStep);
 
         // ROI Mask Region by using maskxyxy (left, top, right ,bottom)
         CvRect roiRect = cvRect(mask_xyxy[0], mask_xyxy[1], mask_xyxy[2] - mask_xyxy[0], mask_xyxy[3] - mask_xyxy[1]); // (left, top, width, height)
         cvSetImageROI(SrcMask, roiRect);
 
         // Obtain ROI image
-        IplImage* roiImg = cvCreateImage(cvSize(roiRect.width, roiRect.height), SrcMask->depth, SrcMask->nChannels);
+        IplImage* roiImg = cvCreateImage(cvSize(roiRect.width, roiRect.height), SrcMask->depth, 1);
         cvCopy(SrcMask, roiImg, NULL);
 
         // Obtain Resized Mask
-        IplImage* FinalMask = cvCreateImage(cvSize(ORG_SIZE_WIDTH, ORG_SIZE_HEIGHT), roiImg->depth, roiImg->nChannels);
+        IplImage* FinalMask = cvCreateImage(cvGetSize(*ImgSrc), roiImg->depth, 1);
         cvResize(roiImg, FinalMask, CV_INTER_LINEAR);
-        cvThreshold(FinalMask, FinalMask, 128, 255, CV_THRESH_BINARY);
 
         // Draw Label and Task
         plot_box_and_label(&Detections[i].label, &Detections[i].Rect, MASK_TRANSPARENCY, &FinalMask, ImgSrc);
@@ -452,18 +459,31 @@ static void RescaleMaskandDrawLabel(const struct Object *Detections, int NumDete
         cvReleaseImage(&SrcMask);
         cvReleaseImage(&roiImg);
         cvReleaseImage(&FinalMask);
+        /*
+        // Uncropped Mask (haven't ROI)
+        CvMat SrcMask = cvMat( TRAINED_SIZE_WIDTH,  TRAINED_SIZE_HEIGHT, CV_32FC1, UnCropedMask[i]);
+
+        int ROI_WIDTH = mask_xyxy[2] - mask_xyxy[0], ROI_HEIGHT = mask_xyxy[3] - mask_xyxy[1];
+        
+        // Data to store final Mask
+        float FinalMask_data[ORG_SIZE_WIDTH * ORG_SIZE_HEIGHT] = {0.f};
+        CvMat FinalMask = cvMat(ORG_SIZE_WIDTH, ORG_SIZE_HEIGHT, CV_32FC1, FinalMask_data);
+        */
     }
 }
 
 int main(int argc, char **argv)
 {
     
-    IplImage* OrgImg = cvLoadImage( argv[1], CV_LOAD_IMAGE_COLOR);
-     if(!OrgImg){
+    IplImage* Img = cvLoadImage( argv[1], CV_LOAD_IMAGE_COLOR);
+    if(!Img){
         printf("---No Img---\n");
         return;
     }
-    IplImage* Img = cvCreateImage( cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), OrgImg->depth, OrgImg->nChannels);
+    IplImage *Img32 = cvCreateImage(cvGetSize(Img), IPL_DEPTH_32F, 3);
+    cvConvertScale(Img, Img32, 1/255.f, 0);
+
+
     char* Bboxtype = "xyxy";
     char* classes = NULL;
 
@@ -490,14 +510,14 @@ int main(int argc, char **argv)
     printf("NMS Done,Got %d Detections...\n", NumDetections);
 
     // Obtain uncroped mask (size : TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH)
-    handle_proto_test(ValidDetections, Mask_Input, NumDetections, UncropedMask);  //[:NumDetections] is the output
+    handle_proto_test(ValidDetections, Mask_Input, NumDetections, UncropedMask, cvGetSize(Img));  //[:NumDetections] is the output
     printf("Handled_proto_test for %d predicitons\n", NumDetections);
 
-    // Bounding Box positions to Real place 
-    rescalebox(ValidDetections, NumDetections, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, ORG_SIZE_WIDTH, ORG_SIZE_HEIGHT);
+    // Bounding Box positions to Real place
+    rescalebox(ValidDetections, NumDetections, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
 
     // Obtain final mask (size : ORG_SIZE_HEIGHT, ORG_SIZE_WIDTH)
     RescaleMaskandDrawLabel(ValidDetections, NumDetections, UncropedMask, &Img);
-    cvReleaseImage(&OrgImg);
     cvReleaseImage(&Img);
+    cvReleaseImage(&Img32);
 }

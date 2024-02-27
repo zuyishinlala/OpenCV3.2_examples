@@ -17,12 +17,12 @@ int main(int argc,char** argv){
         return 0;
     }
 
-    IplImage* Mask = cvLoadImage(argv[1], CV_LOAD_IMAGE_GRAYSCALE); // Mask
+    CvMat* Mask = cvLoadImageM(argv[1], CV_LOAD_IMAGE_GRAYSCALE); // Mask
     cvThreshold(Mask, Mask, 200, 255, CV_THRESH_BINARY);             
 
     IplImage* MaskedImg = cvCloneImage(img);
     cvSet(MaskedImg, CV_RGB(0, 0, 255), Mask); //Specify the color
-
+    
     cvNamedWindow("Org", CV_WINDOW_AUTOSIZE);
     cvShowImage("Org", img); // Masked Img
 
@@ -36,6 +36,6 @@ int main(int argc,char** argv){
     cvWaitKey(0);
     cvDestroyAllWindows();
     cvReleaseImage(&img);
-    cvReleaseImage(&Mask);
+    cvReleaseMat(&Mask);
     cvReleaseImage(&MaskedImg);
 } 

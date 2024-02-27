@@ -1,60 +1,67 @@
+
 #include <opencv/cv.h>
 #include <stdio.h>
 #include <opencv/cxcore.h>
+#include <math.h>
 #include <opencv2/imgcodecs/imgcodecs_c.h>
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
-#include "Parameters.h"
-#include <math.h>
 int cvRound(double value) {return(ceil(value));}
 
 #define HEIGHT 300
 #define WIDTH 300
 
+#define ORG_WIDTH 200
+#define ORG_HEIGHT 587
 int main(int argc, char** argv) {
     // Example float 2D array
-    uint8_t data[HEIGHT * WIDTH] = {0};
+    float data[HEIGHT * WIDTH] = {0};
+    float datadouble[HEIGHT * WIDTH * 4] = {0};
+    float data3h[HEIGHT * WIDTH][3] = {0};
 
-    // Fill the data array
-    for(int row = 150 ; row < HEIGHT ; ++row){
-        for(int col = 0 ; col < WIDTH ; ++col){
-            data[row * WIDTH + col] = 255;
+    IplImage* img = cvCreateImage(cvSize(ORG_WIDTH, ORG_HEIGHT), IPL_DEPTH_32F, 3);
+
+    CvScalar COLOR = cvScalar(0.0, 0., 200.0, 0); // B, G, R if 32F [0:1] if 8U [0:255]
+    cvSet(img, COLOR, NULL);
+
+    cvNamedWindow("Org_Img", CV_WINDOW_AUTOSIZE);
+    cvShowImage("Org_Img", img);
+
+    cvWaitKey(0);
+    cvDestroyAllWindows();
+
+    cvReleaseImage(&img);
+    return 0;
+    for (int row = 150; row < HEIGHT; ++row) {
+        for (int col = 0; col < WIDTH; ++col) {
+            data[row * WIDTH + col] = 1.f;
         }
     }
 
-    // Create an IplImage header
-    IplImage* img = cvCreateImageHeader(cvSize(WIDTH, HEIGHT), IPL_DEPTH_8U, 1);
-    // Set the data pointer
-    cvSetData(img, data, WIDTH); // or simply WIDTH * sizeof(uchar)
+    CvMat m = cvMat( WIDTH, HEIGHT, CV_32FC1, data);
 
-    IplImage* roiImg = cvCreateImage(cvSize(100, 100), img->depth, img->nChannels);
+    CvMat m_3h = cvMat( WIDTH, HEIGHT, CV_32FC3, data3h);
 
-    // Copy the ROI from the source image to the destination image
+    // Adjust the destination size to be larger 
+    CvMat dst = cvMat(WIDTH * 2, HEIGHT * 2, CV_32FC1, datadouble);
 
-    printf("Before\n===%d, %d===\n", img->width, img->height);
-    CvRect roiRect = cvRect(100, 100, 100, 100); // (x(left), y(top), width, height)
-    
-    // Create an ROI (region of interest) from the original image
-    cvSetImageROI(img, roiRect);
+    cvMerge(&m, &m, &m, NULL, &m_3h);
 
-    cvCopy(img, roiImg, NULL);
+    cvMul(img, &m_3h, &m_3h, 1);
 
-    printf("After\n===%d, %d===\n", roiImg->width, roiImg->height);
-    // Create a window
-    cvNamedWindow("Display Image", CV_WINDOW_AUTOSIZE);
+    printf("type m: %d, type dst: %d\n", m.type, dst.type);
 
-    // Show the image in the window
-    cvShowImage("Display Image", img);
+    cvResize(&m, &dst, CV_INTER_LINEAR);
 
-    // Wait for a key press to close the window
+    cvNamedWindow("Org_Img", CV_WINDOW_AUTOSIZE);
+    cvShowImage("Org_Img", &m_3h);
+
+    cvNamedWindow("Dst_Img", CV_WINDOW_AUTOSIZE);
+    cvShowImage("Dst_Img", &dst);
+
     cvWaitKey(0);
-
-    // Destroy the window
-    cvDestroyWindow("Display Image");
-
-    // Release the image header
-    cvReleaseImageHeader(&img);
+    cvDestroyAllWindows();
+    
     cvReleaseImage(&img);
-    cvReleaseImage(&roiImg);
     return 0;
 }

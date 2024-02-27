@@ -4,9 +4,6 @@
 #define NUM_CLASSES 30
 #define NUM_MASKS 32
 
-// image size 
-#define ORG_SIZE_HEIGHT 500
-#define ORG_SIZE_WIDTH 500
 
 #define TRAINED_SIZE_HEIGHT 384
 #define TRAINED_SIZE_WIDTH 640
@@ -24,7 +21,7 @@
 
 #define ROWSIZE HEIGHT0*WIDTH0 + HEIGHT1*WIDTH1 + HEIGHT2*WIDTH2
 
-#define MAX_DETECTIONS 200
+#define MAX_DETECTIONS 50
 #define CONF_THRESHOLD 0.3
 #define NMS_THRESHOLD 0.5
 
@@ -35,6 +32,6 @@
 #define ANCHOR_BASED 0
 
 // OpenCV parameters for drawing
-#define MASK_TRANSPARENCY 0.2 // 0 to 1
+#define MASK_TRANSPARENCY 0.8 // 0 to 1
 
 #endif
