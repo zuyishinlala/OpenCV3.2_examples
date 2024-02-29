@@ -1,14 +1,11 @@
-/*
-#include<opencv2/imgcodecs/imgcodecs_c.h>
-#include<opencv/cv.h>
-#include<opencv/highgui.h>
-*/
-#include "Object.h"
-#include <stdlib.h>
-#include <time.h>
+#include "./Sources/Object.h"
+#include "./Sources/Parameters.h"
+#include "./Sources/Input.h"
+#include "./Sources/Bbox.h"
 #include <stdio.h>
 #include <math.h>
-int cvRound(double value) { return (ceil(value)); }
+#include <time.h>
+int cvRound(double value) {return(ceil(value));}
 
 static void swap(struct Object *a, struct Object *b)
 {
@@ -58,15 +55,21 @@ int main(int argc, char **argv)
 
     for (int i = 0; i < NUMOFOBJ; i++)
     {
-        objects[i].Rect.x = randomFloat(0.0, 100.0);
-        objects[i].Rect.y = randomFloat(0.0, 100.0);
-        objects[i].Rect.width = randomFloat(1.0, 10.0);
-        objects[i].Rect.height = randomFloat(1.0, 10.0);
         objects[i].label = rand() % 5 + 1;
+        objects[i].conf =  randomFloat(1.0, 10.0);
     }
+    for(int i = 0 ; i < 10 ; ++i){
+        printf("%f,", objects[i].conf);
+    }
+    printf("\n");
 
     qsort_inplace(objects, 0, NUMOFOBJ - 1);
+
     printf("====After====\n");
+    for(int i = 0 ; i < 10 ; ++i){
+        printf("%f,", objects[i].conf);
+    }
+    printf("\n");
 
     return 0;
 }

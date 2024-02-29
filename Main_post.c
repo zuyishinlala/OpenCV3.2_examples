@@ -1,16 +1,15 @@
 #include <stdio.h>
 #include <string.h>
-
-
+/*
 #include <opencv/cv.h>
 #include <opencv/cxcore.h>
 #include <opencv2/imgcodecs/imgcodecs_c.h>
 #include <opencv/highgui.h>
-
-#include "Object.h"
-#include "Input.h"
-#include "Bbox.h"
-#include "Parameters.h"
+*/
+#include "./Sources/Object.h"
+#include "./Sources/Parameters.h"
+#include "./Sources/Input.h"
+#include "./Sources/Bbox.h"
 #include <math.h>
 int cvRound(double value) {return(ceil(value));}
 
@@ -106,7 +105,7 @@ static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struc
                       dc * (1 - dr) * GetPixel(ic + 1,     ir, src_height, src_width, Src) +
                 (1 - dc) * (1 - dr) * GetPixel(    ic,     ir, src_height, src_width, Src);
             
-            *Tar = PixelSum > Threshold ? 1.0f : 0.f;
+            *Tar = PixelSum > Threshold ? 255 : 0;
         }
     }
 }
@@ -341,6 +340,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     { // to-do: only sort labels of these classes ( >= 1)
         GetOnlyClass(classes, CountValidCandid, candidates);
     }
+    if(CountValidCandid > ROWSIZE) CountValidCandid = ROWSIZE;
 
     // Sort with confidence
     qsort_inplace(candidates, 0, CountValidCandid - 1);
@@ -424,7 +424,6 @@ static void plot_box_and_label(const int* label, const struct Bbox* box, float m
     cvReleaseImage(&MaskedImg);
 }
 
-
 // rescale_mask + draw label
 static void RescaleMaskandDrawLabel(const struct Object *Detections, int NumDetections, const uint8_t (* UnCropedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], IplImage** ImgSrc){
     /*
@@ -503,11 +502,11 @@ int main(int argc, char **argv)
     struct Object ValidDetections[MAX_DETECTIONS]; 
     int NumDetections = 0;
 
-    // Store Masks Results
-    static uint8_t UncropedMask[MAX_DETECTIONS][TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH] = {0};
-
     non_max_suppression_seg(&input, classes, ValidDetections, &NumDetections, CONF_THRESHOLD);
     printf("NMS Done,Got %d Detections...\n", NumDetections);
+
+    // Store Masks Results
+    static uint8_t UncropedMask[MAX_DETECTIONS][TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH] = {0};
 
     // Obtain uncroped mask (size : TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH)
     handle_proto_test(ValidDetections, Mask_Input, NumDetections, UncropedMask, cvGetSize(Img));  //[:NumDetections] is the output

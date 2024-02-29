@@ -8,9 +8,9 @@
                 "${file}",
                 "-o",
                 "${fileBasenameNoExtension}",
-                "Input.c",
-                "Bbox.c",
-                "`pkg-config --cflags --libs opencv`",
+                "./Sources/Input.c",
+                "./Sources/Bbox.c",
+                //"`pkg-config --cflags --libs opencv`",
                 "-lm"
             ],
             "options": {

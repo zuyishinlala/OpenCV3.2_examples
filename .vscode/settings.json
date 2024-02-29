@@ -14,6 +14,7 @@
         "limits": "c",
         "string": "c",
         "parameters.h": "c",
-        "bbox.h": "c"
+        "bbox.h": "c",
+        "input.h": "c"
     }
 }

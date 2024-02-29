@@ -4,9 +4,10 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/local/include/opencv/",
-                "/usr/local/include/opencv2/",
-                "/usr/include"
+                "${workspaceFolder}/Sources/*"
+                //"/usr/local/include/opencv/",
+                //"/usr/local/include/opencv2/",
+                //"/usr/include"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
