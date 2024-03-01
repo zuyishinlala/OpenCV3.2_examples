@@ -365,35 +365,6 @@ static void rescalebox(struct Object *Detections, const int CountValidDetect, fl
     }
 }
 
-void draw_label(IplImage* input_image, const char* label, int left, int top)
-{
-    int baseLine;
-    CvSize label_size; 
-    CvPoint tlc, brc;
-    // Create Font
-    CvFont font;
-    cvInitFont(&font, CV_FONT_HERSHEY_COMPLEX, 0.5, 0.8, 0, 2, CV_AA);
-
-    CvScalar BLACK = CV_RGB(0, 0, 0);
-    CvScalar BLUE = CV_RGB(50, 178, 255);
-    CvScalar WHITE = CV_RGB(240, 240, 240);
-
-    cvGetTextSize(label, &font, &label_size, &baseLine);
-    //top = max(top, label_size->height);
-    top = (label_size.height > top) ? label_size.height : top;
-    // Top left corner.
-    tlc = cvPoint(left, top);
-    // Bottom right corner.
-    brc = cvPoint(left + label_size.width, top + label_size.height + baseLine);
-
-    // Draw blue rectangle.
-    cvRectangle(input_image, tlc, brc, BLUE, CV_FILLED, CV_AA, 0);
-
-    // Put the label on the black rectangle.
-    // cvPutText: The cvPoint is the BottomLeft Corner
-    cvPutText(input_image, label, cvPoint(left,label_size.height + top), &font, WHITE);
-}
-
 // Plot Label and Bounding Box
 static void plot_box_and_label(const int* label, const struct Bbox* box, float mask_transparency, IplImage **mask, IplImage **ImgSrc){
     int boxthickness = 2;
@@ -436,7 +407,7 @@ static void RescaleMaskandDrawLabel(const struct Object *Detections, int NumDete
 
     for(int i = 0 ; i < NumDetections ; ++i){
 
-        // float32 array to IplImage
+        // uint8_t array to IplImage
         IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
         cvSetData(SrcMask, UnCropedMask[i], SrcMask->widthStep);
 
