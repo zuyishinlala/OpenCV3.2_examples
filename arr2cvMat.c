@@ -16,7 +16,7 @@ int cvRound(double value) {return(ceil(value));}
 int main(int argc, char** argv) {
     // Example float 2D array
     float data[HEIGHT * WIDTH * 3] = {0};
-    float data3h[HEIGHT * WIDTH][3] = {0};
+    float data_resized[ORG_WIDTH*ORG_HEIGHT*3] = {0};
 
     IplImage* img = cvCreateImage(cvSize(ORG_WIDTH, ORG_HEIGHT), IPL_DEPTH_32F, 3);
 
@@ -28,10 +28,12 @@ int main(int argc, char** argv) {
             data[row * WIDTH + col] = 1.f;
         }
     }
-    
+    CvMat* m_ptr = NULL;
     CvMat m = cvMat( WIDTH, HEIGHT, CV_32FC1, data);
+    m_ptr = &m;
 
-    CvMat m_3h = cvMat( WIDTH, HEIGHT, CV_32FC3, data3h);
+    CvMat m_3h = cvMat( ORG_WIDTH, ORG_HEIGHT, CV_32FC1, data_resized);
+
     /*
     // Adjust the destination size to be larger 
     CvMat dst = cvMat(WIDTH * 2, HEIGHT * 2, CV_32FC1, datadouble);
@@ -44,11 +46,21 @@ int main(int argc, char** argv) {
 
     cvResize(&m, &dst, CV_INTER_LINEAR);
     */
-    cvNamedWindow("Org_Img", CV_WINDOW_AUTOSIZE);
-    cvShowImage("Org_Img", &m_3h);
+    float datas[100*100] = {0};
+    CvMat m_100x100 = cvMat(100, 100, CV_32FC1, datas);
+    cvGetSubRect( &m, &m_100x100, cvRect(100, 100, 100, 100));
 
-    //cvNamedWindow("Dst_Img", CV_WINDOW_AUTOSIZE);
-    //cvShowImage("Dst_Img", &dst);
+    cvNamedWindow("Org_Img", CV_WINDOW_AUTOSIZE);
+    cvShowImage("Org_Img", &m);
+
+    cvNamedWindow("Org_Img_100", CV_WINDOW_AUTOSIZE);
+    cvShowImage("Org_Img_100", &m_100x100);
+
+    cvResize(&m, &m_3h, CV_INTER_LINEAR);
+
+    cvNamedWindow("Dst_Img", CV_WINDOW_AUTOSIZE);
+    cvShowImage("Dst_Img", &m_3h);
+
 
     cvWaitKey(0);
     cvDestroyAllWindows();

@@ -52,17 +52,25 @@ int main(int argc, char** argv){
     }
     //IplImage* ImgResized = cvCreateImage(cvSize(WIDTH, HEIGHT), Img->depth, Img->nChannels);
     //cvResize(Img, ImgResized, CV_INTER_LINEAR);
-    uint8_t data[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH] = {0};
+    // Size is not restricted to IplImage size. It can be bigger!
+    uint8_t data[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH * 3] = {0};
 
-    for (int row = 150; row < TRAINED_SIZE_HEIGHT ; ++row) {
-        for (int col = 0; col < TRAINED_SIZE_WIDTH; ++col) {
-            data[row * TRAINED_SIZE_WIDTH + col] = 255;
+    for (int row = TRAINED_SIZE_HEIGHT/2 ; row < TRAINED_SIZE_HEIGHT ; ++row) {
+        for (int col = 0; col < TRAINED_SIZE_WIDTH * 3; ++col) {
+            data[row * TRAINED_SIZE_WIDTH + col] = 255; 
         }
     }
 
     IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
     cvSetData(SrcMask, data, TRAINED_SIZE_WIDTH);
     
+    cvNamedWindow("SrcMask", CV_WINDOW_AUTOSIZE);
+    cvShowImage("SrcMask", SrcMask);
+
+    // Wait for a key event and close the window
+    cvWaitKey(0);
+    cvDestroyAllWindows();
+
     // ROI Mask Region by using maskxyxy (left, top, right ,bottom)
     CvRect roiRect = cvRect(120, 120, 120, 120); // (left, top, width, height)
     cvSetImageROI(SrcMask, roiRect);
