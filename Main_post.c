@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <string.h>
-/*
+
 #include <opencv/cv.h>
 #include <opencv/cxcore.h>
 #include <opencv2/imgcodecs/imgcodecs_c.h>
 #include <opencv/highgui.h>
-*/
+
 #include "./Sources/Object.h"
 #include "./Sources/Parameters.h"
 #include "./Sources/Input.h"
@@ -366,7 +366,7 @@ static void rescalebox(struct Object *Detections, const int CountValidDetect, fl
 }
 
 // Plot Label and Bounding Box
-static void plot_box_and_label(const int* label, const struct Bbox* box, float mask_transparency, IplImage **mask, IplImage **ImgSrc){
+static void plot_box_and_label(const char* label, const struct Bbox* box, float mask_transparency, IplImage **mask, IplImage **ImgSrc){
     int boxthickness = 2;
     CvScalar BLUE = CV_RGB(50, 178, 255);
     CvScalar WHITE = CV_RGB(240, 240, 240);
@@ -378,8 +378,8 @@ static void plot_box_and_label(const int* label, const struct Bbox* box, float m
     cvAddWeighted(*ImgSrc, 1.f - mask_transparency, MaskedImg, mask_transparency, 0, *ImgSrc);
 
     // Draw Bounding Box
-    CvPoint tlp = cvPoint(box->left, box->top);
-    CvPoint brp = cvPoint(box->right, box->bottom);
+    CvPoint tlp = cvPoint((int)box->left, (int)box->top);
+    CvPoint brp = cvPoint((int)box->right, (int)box->bottom);
     cvRectangle(*ImgSrc, tlp, brp, BLUE, boxthickness, CV_AA, 0);
 
     // Draw Label
@@ -409,7 +409,7 @@ static void RescaleMaskandDrawLabel(const struct Object *Detections, int NumDete
 
         // uint8_t array to IplImage
         IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
-        cvSetData(SrcMask, UnCropedMask[i], SrcMask->widthStep);
+        cvSetData(SrcMask, UnCropedMask[i], TRAINED_SIZE_WIDTH);
 
         // ROI Mask Region by using maskxyxy (left, top, right ,bottom)
         CvRect roiRect = cvRect(mask_xyxy[0], mask_xyxy[1], mask_xyxy[2] - mask_xyxy[0], mask_xyxy[3] - mask_xyxy[1]); // (left, top, width, height)
@@ -423,8 +423,8 @@ static void RescaleMaskandDrawLabel(const struct Object *Detections, int NumDete
         IplImage* FinalMask = cvCreateImage(cvGetSize(*ImgSrc), roiImg->depth, 1);
         cvResize(roiImg, FinalMask, CV_INTER_LINEAR);
 
-        // Draw Label and Task
-        plot_box_and_label(&Detections[i].label, &Detections[i].Rect, MASK_TRANSPARENCY, &FinalMask, ImgSrc);
+        // Draw Label and Task (int label to string)
+        plot_box_and_label("Pesudo Label", &Detections[i].Rect, MASK_TRANSPARENCY, &FinalMask, ImgSrc);
 
         cvReleaseImage(&SrcMask);
         cvReleaseImage(&roiImg);
@@ -450,8 +450,8 @@ int main(int argc, char **argv)
         printf("---No Img---\n");
         return;
     }
-    IplImage *Img32 = cvCreateImage(cvGetSize(Img), IPL_DEPTH_32F, 3);
-    cvConvertScale(Img, Img32, 1/255.f, 0);
+    //IplImage *Img32 = cvCreateImage(cvGetSize(Img), IPL_DEPTH_32F, 3);
+    //cvConvertScale(Img, Img32, 1/255.f, 0);
 
 
     char* Bboxtype = "xyxy";
@@ -489,5 +489,5 @@ int main(int argc, char **argv)
     // Obtain final mask (size : ORG_SIZE_HEIGHT, ORG_SIZE_WIDTH)
     RescaleMaskandDrawLabel(ValidDetections, NumDetections, UncropedMask, &Img);
     cvReleaseImage(&Img);
-    cvReleaseImage(&Img32);
+    //cvReleaseImage(&Img32);
 }
