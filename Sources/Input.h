@@ -11,6 +11,7 @@ struct Pred_Input{
 };
 
 void initPredInput(struct Pred_Input*, float*,const char**);
+void initPredInput_pesudo(struct Pred_Input*, float*,const char**);
 void ReadMaskInput(float*, int, int,const char*);
 void ReadFile(float*, int, int,const  char*);
 #endif // OBJECTS_H

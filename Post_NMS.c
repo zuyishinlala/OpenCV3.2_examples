@@ -97,7 +97,7 @@ static void handle_proto_test(int NumDetections, const struct Object* ValidDetec
 
 // Rescale Bbox: Bounding Box positions to Real place
 static void rescalebox(const int NumDetections, struct Object *Detections,  float src_size_w, float src_size_h, float tar_size_w, float tar_size_h){
-    float ratio = minf(tar_size_w/src_size_w, tar_size_h/src_size_h);
+    float ratio = fminf(tar_size_w/src_size_w, tar_size_h/src_size_h);
     float padding_w = (src_size_w - tar_size_w * ratio) / 2, padding_h = (src_size_h - src_size_h * ratio) / 2;
 
     for(int i = 0 ; i < NumDetections ; ++i){
@@ -153,7 +153,7 @@ static inline void getMaskxyxy(int* xyxy, float org_size_w, float org_size_h, fl
 }
 
 //Obtain final mask (size : ORG_SIZE_HEIGHT, ORG_SIZE_WIDTH) and draw label
-static void RescaleMaskandDrawLabel( int NumDetections, const struct Object *Detections, const uint8_t (* UnCropedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], IplImage** ImgSrc){
+static void RescaleMaskandDrawLabel( int NumDetections, const struct Object *Detections, uint8_t (* UnCropedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], IplImage** ImgSrc){
     /*
     Retrieve Real Mask of Original Mask
     Resize to Final Mask

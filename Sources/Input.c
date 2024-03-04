@@ -27,7 +27,7 @@ void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName) 
 
     for (int i = 0; i < RowSize; i++) {
         for (int j = 0; j < ColSize; j++) {
-            if (fscanf(file, "%f", &mask[i * ColSize + j]) != 1) {
+            if (fscanf(file, "%f", mask + i*ColSize + j) != 1) {
                 printf("Error reading from file %s\n", FileName);
                 fclose(file);
                 return;
@@ -38,6 +38,16 @@ void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName) 
     fclose(file);
 }
 
+void initPredInput_pesudo(struct Pred_Input* input, float* mask_ptr, const char** argv){
+    float* cls_ptr = &input->cls_pred[0][0];
+    float* reg_ptr = &input->reg_pred[0][0];
+    float* seg_ptr = &input->seg_pred[0][0];
+
+    ReadMaskInput(reg_ptr, ROWSIZE, 4, argv[1]);
+    ReadMaskInput(cls_ptr, ROWSIZE, NUM_CLASSES, argv[2]);
+    ReadMaskInput(seg_ptr, ROWSIZE, NUM_MASKS, argv[3]);
+    ReadMaskInput(mask_ptr, NUM_MASKS, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, argv[4]);
+}
 
 void initPredInput(struct Pred_Input* input, float* mask_ptr, const char** argv){
     printf("=====Reading Prediction Input...   =====\n");

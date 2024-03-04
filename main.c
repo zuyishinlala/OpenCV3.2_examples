@@ -12,8 +12,6 @@
 #include "./Sources/Bbox.h"
 
 #include "Post_NMS.c"
-#include <math.h>
-int cvRound(double value) {return(ceil(value));}
 
 
 // dist2bbox & generate_anchor in YOLOv6
@@ -47,7 +45,7 @@ static void post_regpreds(float (*distance)[4], char *type)
         {
             // c_xy = (x1y1 + x2y2) / 2
             // wh = x2y2 - x1y1
-            for (int i = 0; i < ROWSIZE; ++i)
+            for (int i = 0; i < row_bound ; ++i)
             {
                 float x1 = distance[i][0], y1 = distance[i][1], x2 = distance[i][2], y2 = distance[i][3];
                 distance[i][0] = (x2 + x1) / 2; // center_x
@@ -56,7 +54,7 @@ static void post_regpreds(float (*distance)[4], char *type)
                 distance[i][3] = (y2 - y1);     // height
             }
         }
-        for (int i = 0; i < ROWSIZE; ++i)
+        for (int i = 0; i < row_bound ; ++i)
         {
             for (int j = 0; j < 4; ++j)
             {
@@ -199,7 +197,7 @@ static void nms_sorted_bboxes(const struct Object* faceobjects, int size, struct
     }
     return;
 }
-
+/*
 static void GetOnlyClass(char* className, int *Candid, struct Object* candidates){
     int ValidCandid = 0;
     for(int i = 0 ; i < *Candid ; ++i){
@@ -209,7 +207,7 @@ static void GetOnlyClass(char* className, int *Candid, struct Object* candidates
     }
     *Candid = ValidCandid;
 }
-
+*/
 static void non_max_suppression_seg(struct Pred_Input *input, char *classes, struct Object *picked_objects, int* CountValidDetect, float conf_threshold)
 {
     // Calculate max class and prob for each row
@@ -232,7 +230,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
         }
     }
 
-    printf("%d Candidates...\n", CountValidCandid);
+    printf("Found %d candidates...\n", CountValidCandid);
     int max_wh = 4096;        // maximum box width and height
     int max_nms = 30000;      // maximum number of boxes put into torchvision.ops.nms()
     float time_limit = 10.0f; // quit the function when nms cost time exceed the limit time.
@@ -244,7 +242,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
 
     if (classes != NULL)
     { // to-do: only sort labels of these classes ( >= 1)
-        GetOnlyClass(classes, CountValidCandid, candidates);
+        //GetOnlyClass(classes, CountValidCandid, candidates);
     }
     if(CountValidCandid > ROWSIZE) CountValidCandid = ROWSIZE;
 
@@ -265,39 +263,49 @@ static inline void PreProcessing( float* Mask_Input, int* NumDetections, struct 
     struct Pred_Input input;
 
     // 10 Inputs (9 prediction input + 1 mask input)
-    initPredInput(&input, Mask_Input, argv);
+    initPredInput_pesudo(&input, Mask_Input, argv);
 
-    sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
+    //sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
     
-    post_regpreds(input.reg_pred, Bboxtype);
-    printf("Post_RegPredictions on reg_preds Done\n");
+    //post_regpreds(input.reg_pred, Bboxtype);
+    //printf("Post_RegPredictions on reg_preds Done\n");
 
     non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
-    printf("NMS Done,Got %d Detections...\n", NumDetections);
+    printf("NMS Done,Got %d Detections...\n", *NumDetections);
 }
 
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
-static inline void PostProcessing(int* NumDetections, struct Object *ValidDetections, const float* Mask_Input, uint8_t (* UncroppedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], IplImage** Img){
+static inline void PostProcessing(int* NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], uint8_t (* UncroppedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], IplImage** Img){
 
-    handle_proto_test(NumDetections, ValidDetections, Mask_Input, UncroppedMask, cvGetSize(*Img)); 
-    printf("Handled_proto_test for %d predicitons.\n", NumDetections);
+    handle_proto_test(*NumDetections, ValidDetections, Mask_Input, UncroppedMask, cvGetSize(*Img)); 
+    printf("Handled_proto_test for %d predicitons.\n", *NumDetections);
 
-    rescalebox(NumDetections, ValidDetections, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
+    rescalebox(*NumDetections, ValidDetections, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
     printf("Rescaled Box to real place.\n");
 
-    RescaleMaskandDrawLabel(NumDetections, ValidDetections, UncroppedMask, Img);
-    printf("Drawed Label and Rescaled Mask for %d detection.\n", NumDetections);
+    RescaleMaskandDrawLabel(*NumDetections, ValidDetections, UncroppedMask, Img);
+    printf("Drawed Label and Rescaled Mask for %d detection.\n", *NumDetections);
 }
 
+static inline void PrintNMSResult(int NumDetections, struct Object* ValidDetections){
+    for(int i = 0 ; i < NumDetections ; ++i){
+        printf("======Index: %d=====\n", i);
+        printf("Box Position: %f, %f, %f, %f\n",ValidDetections[i].Rect.left, ValidDetections[i].Rect.top, ValidDetections[i].Rect.right, ValidDetections[i].Rect.bottom);
+        printf("Confidence: %f \n",ValidDetections[i].conf);
+        printf("Confidence: %d \n",ValidDetections[i].label);
+        printf("====================\n");
+    }
+}
 
-int main(int argc, char **argv)
+int main(int argc, const char **argv)
 {
-    
+    /*
     IplImage* Img = cvLoadImage( argv[1], CV_LOAD_IMAGE_COLOR);
     if(!Img){
         printf("---No Img---\n");
         return;
     }
+    */
     //IplImage *Img32 = cvCreateImage(cvGetSize(Img), IPL_DEPTH_32F, 3);
     //cvConvertScale(Img, Img32, 1/255.f, 0);
 
@@ -308,10 +316,10 @@ int main(int argc, char **argv)
     int NumDetections = 0;
 
     PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, argv);
-
+    PrintNMSResult(NumDetections, ValidDetections);
     // Store Masks Results
-    uint8_t UncropedMask[MAX_DETECTIONS][TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH] = {0};
-
+    //uint8_t UncropedMask[MAX_DETECTIONS][TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH] = {0};
+    /*
     PostProcessing(&NumDetections, ValidDetections, Mask_Input, UncropedMask, &Img);
 
     // ========================
@@ -325,4 +333,5 @@ int main(int argc, char **argv)
     cvDestroyAllWindows();
 
     cvReleaseImage(&Img);
+    */
 }
