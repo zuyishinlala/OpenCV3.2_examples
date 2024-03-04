@@ -11,6 +11,13 @@
 #include <math.h>
 int cvRound(double value) {return(ceil(value));}
 
+static void sigmoid(int rowsize, int colsize, float *ptr)
+{
+    for (int i = 0; i < rowsize * colsize; ++i, ++ptr)
+    {
+        *ptr = 1.0f / (1.0f + powf(2.71828182846, -*ptr));
+    }
+}
 
 static float GetPixel(int x, int y, int width, int height, float *Src){
     if(x < 0 || x >= width || y < 0 || y >= height) return 0.f;
@@ -48,7 +55,7 @@ static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struc
     }
 }
 
-static void handle_proto_test(const struct Object* ValidDetections, const float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], int NumDetections,  uint8_t (* UnCropedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], CvSize OrgImg_Size)
+static void handle_proto_test(int NumDetections, const struct Object* ValidDetections, const float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH],   uint8_t (* UnCropedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], CvSize OrgImg_Size)
 {
     // Resize mask & Obtain Binary Mask
     // Matrix Multiplication
@@ -88,12 +95,12 @@ static void handle_proto_test(const struct Object* ValidDetections, const float 
     }
 }
 
-// Rescale 
-static void rescalebox(struct Object *Detections, const int CountValidDetect, float src_size_w, float src_size_h, float tar_size_w, float tar_size_h){
+// Rescale Bbox: Bounding Box positions to Real place
+static void rescalebox(const int NumDetections, struct Object *Detections,  float src_size_w, float src_size_h, float tar_size_w, float tar_size_h){
     float ratio = minf(tar_size_w/src_size_w, tar_size_h/src_size_h);
     float padding_w = (src_size_w - tar_size_w * ratio) / 2, padding_h = (src_size_h - src_size_h * ratio) / 2;
 
-    for(int i = 0 ; i < CountValidDetect ; ++i){
+    for(int i = 0 ; i < NumDetections ; ++i){
         struct Bbox *Box = &Detections[i].Rect;
 
         Box->left   = (Box->left - padding_w) / ratio;
@@ -106,7 +113,7 @@ static void rescalebox(struct Object *Detections, const int CountValidDetect, fl
 }
 
 // Plot Label and Bounding Box
-static void plot_box_and_label(const char* label, const struct Bbox* box, float mask_transparency, IplImage **mask, IplImage **ImgSrc){
+static void plot_box_and_label(const char* label, const struct Bbox* box, float mask_transparency, IplImage** mask, IplImage** ImgSrc){
     int boxthickness = 2;
     CvScalar BLUE = CV_RGB(50, 178, 255);
     CvScalar WHITE = CV_RGB(240, 240, 240);
@@ -145,8 +152,8 @@ static inline void getMaskxyxy(int* xyxy, float org_size_w, float org_size_h, fl
     return;
 }
 
-// rescale_mask + draw label
-static void RescaleMaskandDrawLabel(const struct Object *Detections, int NumDetections, const uint8_t (* UnCropedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], IplImage** ImgSrc){
+//Obtain final mask (size : ORG_SIZE_HEIGHT, ORG_SIZE_WIDTH) and draw label
+static void RescaleMaskandDrawLabel( int NumDetections, const struct Object *Detections, const uint8_t (* UnCropedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], IplImage** ImgSrc){
     /*
     Retrieve Real Mask of Original Mask
     Resize to Final Mask

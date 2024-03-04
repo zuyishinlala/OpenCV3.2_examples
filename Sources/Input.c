@@ -17,7 +17,7 @@ void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName){
     fclose(file);
 }
 
-void ReadMaskInput(float *mask, int RowSize, int ColSize, const char *FileName) {
+void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName) {
     FILE *file = fopen(FileName, "r");
 
     if (file == NULL) {
@@ -39,7 +39,7 @@ void ReadMaskInput(float *mask, int RowSize, int ColSize, const char *FileName) 
 }
 
 
-void initPredInput(struct Pred_Input* input, float *mask_ptr,const char** argv){
+void initPredInput(struct Pred_Input* input, float* mask_ptr, const char** argv){
     printf("=====Reading Prediction Input...   =====\n");
     
     float* cls_ptr = &input->cls_pred[0][0];
@@ -73,5 +73,5 @@ void initPredInput(struct Pred_Input* input, float *mask_ptr,const char** argv){
     seg_ptr += WIDTH1*HEIGHT1*NUM_MASKS;
     ReadFile(seg_ptr, WIDTH2*HEIGHT2, NUM_MASKS, argv[10]);
 
-    ReadMaskInput(NUM_MASKS, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, mask_ptr, argv[11]);
+    ReadMaskInput(mask_ptr, NUM_MASKS, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, argv[11]);
 }

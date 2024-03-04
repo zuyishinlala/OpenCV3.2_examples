@@ -15,17 +15,10 @@
 #include <math.h>
 int cvRound(double value) {return(ceil(value));}
 
-static void sigmoid(int rowsize, int colsize, float *ptr)
-{
-    for (int i = 0; i < rowsize * colsize; ++i, ++ptr)
-    {
-        *ptr = 1.0f / (1.0f + powf(2.71828182846, -*ptr));
-    }
-}
 
+// dist2bbox & generate_anchor in YOLOv6
 static void post_regpreds(float (*distance)[4], char *type)
 {
-    // dist2bbox & generate_anchor in YOLOv6
     int row = 0;
     float stride = 8.f;
     float row_bound = HEIGHT0, col_bound = WIDTH0;
@@ -141,10 +134,11 @@ static void qsort_inplace(struct Object *Objects, int left, int right)
     if (i < right)
         qsort_inplace(Objects, i, right);
 }
-/*
+
 // ========================================
 // Calculate intersection area -- xywh
 // ========================================
+/*
 static float intersection_area(const struct Bbox a, const struct Bbox b) {
     float x_overlap = fmax(0, fmin(a.x + a.height / 2, b.x + b.height / 2) - fmax(a.x - a.height / 2, b.x - b.height / 2));
     float y_overlap = fmax(0, fmin(a.y + a.width / 2, b.y + b.width / 2) - fmax(a.y - a.width / 2, b.y - b.width / 2));
@@ -260,6 +254,41 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     return;
 }
 
+// Read Inputs + Pre-process of Inputs + NMS
+static inline void PreProcessing( float* Mask_Input, int* NumDetections, struct Object *ValidDetections, const char** argv){
+    char* Bboxtype = "xyxy";
+    char* classes = NULL;
+
+    // ========================
+    // Init Inputs in Sources/Input.c
+    // ========================
+    struct Pred_Input input;
+
+    // 10 Inputs (9 prediction input + 1 mask input)
+    initPredInput(&input, Mask_Input, argv);
+
+    sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
+    
+    post_regpreds(input.reg_pred, Bboxtype);
+    printf("Post_RegPredictions on reg_preds Done\n");
+
+    non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
+    printf("NMS Done,Got %d Detections...\n", NumDetections);
+}
+
+// Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
+static inline void PostProcessing(int* NumDetections, struct Object *ValidDetections, const float* Mask_Input, uint8_t (* UncroppedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], IplImage** Img){
+
+    handle_proto_test(NumDetections, ValidDetections, Mask_Input, UncroppedMask, cvGetSize(*Img)); 
+    printf("Handled_proto_test for %d predicitons.\n", NumDetections);
+
+    rescalebox(NumDetections, ValidDetections, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
+    printf("Rescaled Box to real place.\n");
+
+    RescaleMaskandDrawLabel(NumDetections, ValidDetections, UncroppedMask, Img);
+    printf("Drawed Label and Rescaled Mask for %d detection.\n", NumDetections);
+}
+
 
 int main(int argc, char **argv)
 {
@@ -272,47 +301,18 @@ int main(int argc, char **argv)
     //IplImage *Img32 = cvCreateImage(cvGetSize(Img), IPL_DEPTH_32F, 3);
     //cvConvertScale(Img, Img32, 1/255.f, 0);
 
-
-    char* Bboxtype = "xyxy";
-    char* classes = NULL;
-
-    // ========================
-    // 10 Inputs (9 prediction input + 1 mask input)
-    // ========================
-    struct Pred_Input input;
     float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH]; 
-
-    // ========================
-    // Init Inputs in Sources/Input.c
-    // ========================
-    initPredInput(&input, &Mask_Input[0][0], argv);
-    
-    sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
-    
-    post_regpreds(input.reg_pred, Bboxtype);
-    printf("Post_RegPredictions on reg_preds Done\n");
 
     // Recorded Detections for NMS
     struct Object ValidDetections[MAX_DETECTIONS]; 
     int NumDetections = 0;
 
-    non_max_suppression_seg(&input, classes, ValidDetections, &NumDetections, CONF_THRESHOLD);
-    printf("NMS Done,Got %d Detections...\n", NumDetections);
+    PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, argv);
 
     // Store Masks Results
-    static uint8_t UncropedMask[MAX_DETECTIONS][TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH] = {0};
+    uint8_t UncropedMask[MAX_DETECTIONS][TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH] = {0};
 
-    // ========================
-    // Post NMS in Post_NMS.c
-    // ========================
-    handle_proto_test(ValidDetections, Mask_Input, NumDetections, UncropedMask, cvGetSize(Img)); 
-    printf("Handled_proto_test for %d predicitons\n", NumDetections);
-
-    // Bounding Box positions to Real place
-    rescalebox(ValidDetections, NumDetections, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
-
-    // Obtain final mask (size : ORG_SIZE_HEIGHT, ORG_SIZE_WIDTH)
-    RescaleMaskandDrawLabel(ValidDetections, NumDetections, UncropedMask, &Img);
+    PostProcessing(&NumDetections, ValidDetections, Mask_Input, UncropedMask, &Img);
 
     // ========================
     // Display Output
