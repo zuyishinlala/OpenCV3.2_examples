@@ -15,6 +15,8 @@
         "string": "c",
         "parameters.h": "c",
         "bbox.h": "c",
-        "input.h": "c"
+        "input.h": "c",
+        "string.h": "c",
+        "stdlib.h": "c"
     }
 }

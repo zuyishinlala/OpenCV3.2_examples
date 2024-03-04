@@ -1,8 +1,7 @@
 #include "Input.h"
 
-void ReadFile(float* Dst, int RowSize, int ColSize,  char* FileName){
-    FILE *file;
-    file = fopen( FileName, "r");
+void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName){
+    FILE *file = fopen( FileName, "r");
 
     if (file == NULL) {
         printf("Error opening file %s\n", FileName);
@@ -18,7 +17,29 @@ void ReadFile(float* Dst, int RowSize, int ColSize,  char* FileName){
     fclose(file);
 }
 
-void initPredInput(struct Pred_Input* input, char** argv){
+void ReadMaskInput(float *mask, int RowSize, int ColSize, const char *FileName) {
+    FILE *file = fopen(FileName, "r");
+
+    if (file == NULL) {
+        printf("Error opening file %s\n", FileName);
+        return;
+    }
+
+    for (int i = 0; i < RowSize; i++) {
+        for (int j = 0; j < ColSize; j++) {
+            if (fscanf(file, "%f", &mask[i * ColSize + j]) != 1) {
+                printf("Error reading from file %s\n", FileName);
+                fclose(file);
+                return;
+            }
+        }
+    }
+
+    fclose(file);
+}
+
+
+void initPredInput(struct Pred_Input* input, float *mask_ptr,const char** argv){
     printf("=====Reading Prediction Input...   =====\n");
     
     float* cls_ptr = &input->cls_pred[0][0];
@@ -26,29 +47,31 @@ void initPredInput(struct Pred_Input* input, char** argv){
     float* seg_ptr = &input->seg_pred[0][0];
     
     // Cls_Predictions
-    ReadFile(cls_ptr, WIDTH0*HEIGHT0, NUM_CLASSES, argv[0]);
+    ReadFile(cls_ptr, WIDTH0*HEIGHT0, NUM_CLASSES, argv[2]);
 
     cls_ptr += WIDTH0*HEIGHT0*NUM_CLASSES;
-    ReadFile(cls_ptr, WIDTH1*HEIGHT1, NUM_CLASSES, argv[1]);
+    ReadFile(cls_ptr, WIDTH1*HEIGHT1, NUM_CLASSES, argv[3]);
 
     cls_ptr += WIDTH1*HEIGHT1*NUM_CLASSES;
-    ReadFile(cls_ptr, WIDTH2*HEIGHT2, NUM_CLASSES, argv[2]);
+    ReadFile(cls_ptr, WIDTH2*HEIGHT2, NUM_CLASSES, argv[4]);
 
     // Reg_Predictions
-    ReadFile(reg_ptr, WIDTH0*HEIGHT0, 4, argv[3]);
+    ReadFile(reg_ptr, WIDTH0*HEIGHT0, 4, argv[5]);
 
     reg_ptr += WIDTH0*HEIGHT0*4;
-    ReadFile(reg_ptr, WIDTH1*HEIGHT1, 4, argv[4]);
+    ReadFile(reg_ptr, WIDTH1*HEIGHT1, 4, argv[6]);
 
     reg_ptr += WIDTH1*HEIGHT1*4;
-    ReadFile(reg_ptr, WIDTH2*HEIGHT2, 4, argv[5]);
+    ReadFile(reg_ptr, WIDTH2*HEIGHT2, 4, argv[7]);
 
     // Seg_Predictions
-    ReadFile(seg_ptr, WIDTH0*HEIGHT0, NUM_MASKS, argv[6]);
+    ReadFile(seg_ptr, WIDTH0*HEIGHT0, NUM_MASKS, argv[8]);
 
     seg_ptr += WIDTH0*HEIGHT0*NUM_MASKS;
-    ReadFile(seg_ptr, WIDTH1*HEIGHT1, NUM_MASKS, argv[7]);
+    ReadFile(seg_ptr, WIDTH1*HEIGHT1, NUM_MASKS, argv[9]);
  
     seg_ptr += WIDTH1*HEIGHT1*NUM_MASKS;
-    ReadFile(seg_ptr, WIDTH2*HEIGHT2, NUM_MASKS, argv[8]);
+    ReadFile(seg_ptr, WIDTH2*HEIGHT2, NUM_MASKS, argv[10]);
+
+    ReadMaskInput(NUM_MASKS, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, mask_ptr, argv[11]);
 }
