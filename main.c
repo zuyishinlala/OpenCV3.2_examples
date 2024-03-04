@@ -275,25 +275,33 @@ static inline void PreProcessing( float* Mask_Input, int* NumDetections, struct 
 }
 
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
-static inline void PostProcessing(int* NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], uint8_t (* UncroppedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], IplImage** Img){
+static inline void PostProcessing(int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH],uint8_t(*UncroppedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], IplImage** Img){
+    /*
+    for(int i = 0 ; i < NumDetections ; ++i){
+        uint8_t Mask[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH] = {0};
+        struct Object* Detect = &ValidDetections[i];
+        handle_proto_test(Detect, Mask_Input, Mask, cvGetSize(*Img));
+        rescalebox();
+        RescaleMaskandDrawLabel();
+    }
+    */
+    handle_proto_test(NumDetections, ValidDetections, Mask_Input, UncroppedMask, cvGetSize(*Img)); 
+    printf("Handled_proto_test for %d predicitons.\n", NumDetections);
 
-    handle_proto_test(*NumDetections, ValidDetections, Mask_Input, UncroppedMask, cvGetSize(*Img)); 
-    printf("Handled_proto_test for %d predicitons.\n", *NumDetections);
-
-    rescalebox(*NumDetections, ValidDetections, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
+    rescalebox(NumDetections, ValidDetections, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
     printf("Rescaled Box to real place.\n");
 
-    RescaleMaskandDrawLabel(*NumDetections, ValidDetections, UncroppedMask, Img);
-    printf("Drawed Label and Rescaled Mask for %d detection.\n", *NumDetections);
+    RescaleMaskandDrawLabel(NumDetections, ValidDetections, UncroppedMask, Img);
+    printf("Drawed Label and Rescaled Mask for %d detection.\n", NumDetections);
 }
 
 static inline void PrintNMSResult(int NumDetections, struct Object* ValidDetections){
     for(int i = 0 ; i < NumDetections ; ++i){
-        printf("======Index: %d=====\n", i);
+        printf("======Index: %d======\n", i);
         printf("Box Position: %f, %f, %f, %f\n",ValidDetections[i].Rect.left, ValidDetections[i].Rect.top, ValidDetections[i].Rect.right, ValidDetections[i].Rect.bottom);
         printf("Confidence: %f \n",ValidDetections[i].conf);
         printf("Confidence: %d \n",ValidDetections[i].label);
-        printf("====================\n");
+        printf("=====================\n");
     }
 }
 

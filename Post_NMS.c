@@ -55,6 +55,7 @@ static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struc
     }
 }
 
+// Obtain Uncropped Mask
 static void handle_proto_test(int NumDetections, const struct Object* ValidDetections, const float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH],   uint8_t (* UnCropedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], CvSize OrgImg_Size)
 {
     // Resize mask & Obtain Binary Mask
