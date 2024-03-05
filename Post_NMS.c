@@ -83,9 +83,7 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
 // Rescale Bbox: Bounding Box positions to Real place
 static void rescalebox(struct Bbox *Box, float src_size_w, float src_size_h, float tar_size_w, float tar_size_h){
     float ratio = fminf(src_size_w/ tar_size_w, src_size_h/tar_size_h);
-    printf("Ratio is: %f\n", ratio);
     float padding_w = (src_size_w - tar_size_w * ratio) / 2, padding_h = (src_size_h - tar_size_h * ratio) / 2;
-    printf("Padding:%f, %f\n", padding_w, padding_h);
     Box->left   = (Box->left - padding_w) / ratio;
     Box->right  = (Box->right - padding_w) / ratio;
     Box->top    = (Box->top - padding_h) / ratio;
@@ -135,23 +133,16 @@ static inline void getMaskxyxy(int* xyxy, float org_size_w, float org_size_h, fl
 }
 
 //Obtain final mask (size : ORG_SIZE_HEIGHT, ORG_SIZE_WIDTH) and draw label
-static void RescaleMaskandDrawLabel(struct Object* obj, uint8_t* UnCropedMask, IplImage** ImgSrc){
-    /*
-    Retrieve Real Mask of Original Mask
-    Resize to Final Mask
-    Draw Label
-    */
-    int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
-    getMaskxyxy(mask_xyxy, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*ImgSrc)->width, (*ImgSrc)->height);
-
+void RescaleMaskandDrawLabel(struct Object* obj, uint8_t* UnCropedMask, IplImage** ImgSrc, int* mask_xyxy){
+    
     // uint8_t array to IplImage
     IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
     cvSetData(SrcMask, UnCropedMask, TRAINED_SIZE_WIDTH);
 
-    // ROI Mask Region by using maskxyxy (left, top, right ,bottom)
+    // ROI Mask Region by using maskxyxy
     CvRect roiRect = cvRect(mask_xyxy[0], mask_xyxy[1], mask_xyxy[2] - mask_xyxy[0], mask_xyxy[3] - mask_xyxy[1]); // (left, top, width, height)
     cvSetImageROI(SrcMask, roiRect);
-
+    
     // Obtain ROI image
     IplImage* roiImg = cvCreateImage(cvSize(roiRect.width, roiRect.height), SrcMask->depth, 1);
     cvCopy(SrcMask, roiImg, NULL);
@@ -161,7 +152,7 @@ static void RescaleMaskandDrawLabel(struct Object* obj, uint8_t* UnCropedMask, I
     cvResize(roiImg, FinalMask, CV_INTER_LINEAR);
 
     // Draw Label and Task (int label to string)
-    plot_box_and_label("Pesudo Label", &obj->Rect, MASK_TRANSPARENCY, &FinalMask, ImgSrc);
+    // plot_box_and_label("Pesudo Label", &obj->Rect, MASK_TRANSPARENCY, &FinalMask, ImgSrc);
 
     cvReleaseImage(&SrcMask);
     cvReleaseImage(&roiImg);
