@@ -13,7 +13,7 @@ int cvRound(double value) {return(ceil(value));}
 
 static void sigmoid(int rowsize, int colsize, float *ptr)
 {
-    for (int i = 0; i < rowsize * colsize; ++i, ++ptr)
+    for (int i = 0; i < rowsize * colsize ; ++i, ++ptr)
     {
         *ptr = 1.0f / (1.0f + powf(2.71828182846, -*ptr));
     }
@@ -25,22 +25,21 @@ static float GetPixel(int x, int y, int width, int height, float *Src){
 }
 
 //Align Corner = False
-static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struct Bbox Bound, CvSize OrgImgSize){
+static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struct Bbox Bound){
 
-    float src_width = TRAINED_SIZE_WIDTH, src_height = TRAINED_SIZE_HEIGHT;
-    float tar_width = OrgImgSize.width, tar_height = OrgImgSize.height;
+    float src_width = MASK_SIZE_WIDTH, src_height = MASK_SIZE_HEIGHT;
+    float tar_width = TRAINED_SIZE_WIDTH, tar_height = TRAINED_SIZE_WIDTH;
 
     float r_ratio = src_height / tar_height;
     float c_ratio = src_width / tar_width;
-    
     // Perform Binary Threshold only in the Bounding Box Region
-    for(int r = Bound.top ; r < Bound.bottom ; ++r){
-        for(int c = Bound.left ; c < Bound.right ; ++c, ++Tar){
+    for(int r = (int)Bound.top ; r <  (int)Bound.bottom ; ++r){
+        for(int c =  (int)Bound.left ; c <  (int)Bound.right ; ++c){
             float PixelSum = 0.f;
-
+            
             float dr = (r + 0.5) * r_ratio - 0.5;
             float dc = (c + 0.5) * c_ratio - 0.5;
-            int  ir = floorf(dr), ic = floorf(dc);
+            float ir = floorf(dr), ic = floorf(dc);
 
             dr = (dr < 0.f) ? 1.0f : ((dr > src_height - 1.0f) ? 0.f : dr - ir);
             dc = (dc < 0.f) ? 1.0f : ((dc > src_width - 1.0f) ? 0.f : dc - ic);
@@ -49,68 +48,50 @@ static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struc
                      (1 - dc) *  dr * GetPixel(    ic, ir + 1, src_height, src_width, Src) +
                       dc * (1 - dr) * GetPixel(ic + 1,     ir, src_height, src_width, Src) +
                 (1 - dc) * (1 - dr) * GetPixel(    ic,     ir, src_height, src_width, Src);
-            
-            *Tar = PixelSum > Threshold ? 255 : 0;
+            *(Tar + r * TRAINED_SIZE_WIDTH + c) = (PixelSum > Threshold) ? 255 : 0;
         }
     }
 }
 
 // Obtain Uncropped Mask
-static void handle_proto_test(int NumDetections, const struct Object* ValidDetections, const float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH],   uint8_t (* UnCropedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], CvSize OrgImg_Size)
+static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], uint8_t* UncroppedMask)
 {
     // Resize mask & Obtain Binary Mask
     // Matrix Multiplication
-    /*
-    - matrix multiplication. 32 * masks
-    - sigmoid
-    - reshape to [MASK_SIZE_HEIGHT][MASK_SIZE_WIDTH]
-    - bilinear interpolate to [TRAINED_SIZE_HEIGHT][TRAINED_SIZE_WIDTH]
-    - crop mask 
-    - binary threshold
-    */
-    float Binary_Thres = 0.5;
-    for(int d = 0 ; d < NumDetections ; ++d){
-        float* maskcoeffs = ValidDetections[d].maskcoeff;
-        float pred_mask[MASK_SIZE_HEIGHT][MASK_SIZE_WIDTH] = {0};
-        float* mask_ptr = &pred_mask[0][0];
+    float* maskcoeffs = obj->maskcoeff;
+    struct Bbox box = obj->Rect;
+   
+    float Binary_Thres = 0.5f;
+    float pred_mask[MASK_SIZE_HEIGHT][MASK_SIZE_WIDTH] = {0};
+    float* mask_ptr = &pred_mask[0][0];
 
-        // Matrix Multiplication
-        for(int i = 0 ; i < MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH ; ++i, ++mask_ptr){
-            float Pixel = 0.f;
-            for(int c = 0 ; c < NUM_MASKS ; ++c){
-                Pixel += maskcoeffs[c] * masks[c][i];
-            }
-            *mask_ptr = Pixel;
+    // Obtain Uncropped Mask (size 160*160)
+    for(int i = 0 ; i < MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH ; ++i, ++mask_ptr){
+        float Pixel = 0.f;
+        for(int c = 0 ; c < NUM_MASKS ; ++c){
+            Pixel += maskcoeffs[c] * masks[c][i];
         }
-        sigmoid(MASK_SIZE_HEIGHT, MASK_SIZE_WIDTH, &pred_mask[0][0]);
-        
-        // Crop Mask
-        struct Bbox box = ValidDetections[d].Rect;
-        int left = fmax(0, floorf(box.left)), top = fmax(0, floorf(box.top));
-        int right = fmin(TRAINED_SIZE_WIDTH, ceilf(box.right)), bottom = fmin(TRAINED_SIZE_HEIGHT, ceilf(box.right));
-
-        struct Bbox Bound = {left, top, right, bottom};
-
-        // Bilinear Interpolate + Binary Threshold 
-        BilinearInterpolate(&pred_mask[0][0], &UnCropedMask[d][0], Binary_Thres, Bound, OrgImg_Size);
+        *mask_ptr = Pixel;
     }
+
+    sigmoid(MASK_SIZE_HEIGHT, MASK_SIZE_WIDTH, &pred_mask[0][0]);
+    // Bilinear Interpolate + Binary Threshold 
+    // Obtain Uncropped Mask (size 640 * 640)
+    BilinearInterpolate(&pred_mask[0][0], UncroppedMask, Binary_Thres, box);
 }
 
 // Rescale Bbox: Bounding Box positions to Real place
-static void rescalebox(const int NumDetections, struct Object *Detections,  float src_size_w, float src_size_h, float tar_size_w, float tar_size_h){
-    float ratio = fminf(tar_size_w/src_size_w, tar_size_h/src_size_h);
-    float padding_w = (src_size_w - tar_size_w * ratio) / 2, padding_h = (src_size_h - src_size_h * ratio) / 2;
+static void rescalebox(struct Bbox *Box, float src_size_w, float src_size_h, float tar_size_w, float tar_size_h){
+    float ratio = fminf(src_size_w/ tar_size_w, src_size_h/tar_size_h);
+    printf("Ratio is: %f\n", ratio);
+    float padding_w = (src_size_w - tar_size_w * ratio) / 2, padding_h = (src_size_h - tar_size_h * ratio) / 2;
+    printf("Padding:%f, %f\n", padding_w, padding_h);
+    Box->left   = (Box->left - padding_w) / ratio;
+    Box->right  = (Box->right - padding_w) / ratio;
+    Box->top    = (Box->top - padding_h) / ratio;
+    Box->bottom = (Box->bottom - padding_h) / ratio;
 
-    for(int i = 0 ; i < NumDetections ; ++i){
-        struct Bbox *Box = &Detections[i].Rect;
-
-        Box->left   = (Box->left - padding_w) / ratio;
-        Box->right  = (Box->right - padding_w) / ratio;
-        Box->top    = (Box->top - padding_h) / ratio;
-        Box->bottom = (Box->bottom - padding_h) / ratio;
-
-        clamp(Box, tar_size_w, tar_size_h);
-    }
+    clamp(Box, tar_size_w, tar_size_h);
 }
 
 // Plot Label and Bounding Box
@@ -154,7 +135,7 @@ static inline void getMaskxyxy(int* xyxy, float org_size_w, float org_size_h, fl
 }
 
 //Obtain final mask (size : ORG_SIZE_HEIGHT, ORG_SIZE_WIDTH) and draw label
-static void RescaleMaskandDrawLabel( int NumDetections, const struct Object *Detections, uint8_t (* UnCropedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], IplImage** ImgSrc){
+static void RescaleMaskandDrawLabel(struct Object* obj, uint8_t* UnCropedMask, IplImage** ImgSrc){
     /*
     Retrieve Real Mask of Original Mask
     Resize to Final Mask
@@ -163,29 +144,26 @@ static void RescaleMaskandDrawLabel( int NumDetections, const struct Object *Det
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
     getMaskxyxy(mask_xyxy, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*ImgSrc)->width, (*ImgSrc)->height);
 
-    for(int i = 0 ; i < NumDetections ; ++i){
+    // uint8_t array to IplImage
+    IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
+    cvSetData(SrcMask, UnCropedMask, TRAINED_SIZE_WIDTH);
 
-        // uint8_t array to IplImage
-        IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
-        cvSetData(SrcMask, UnCropedMask[i], TRAINED_SIZE_WIDTH);
+    // ROI Mask Region by using maskxyxy (left, top, right ,bottom)
+    CvRect roiRect = cvRect(mask_xyxy[0], mask_xyxy[1], mask_xyxy[2] - mask_xyxy[0], mask_xyxy[3] - mask_xyxy[1]); // (left, top, width, height)
+    cvSetImageROI(SrcMask, roiRect);
 
-        // ROI Mask Region by using maskxyxy (left, top, right ,bottom)
-        CvRect roiRect = cvRect(mask_xyxy[0], mask_xyxy[1], mask_xyxy[2] - mask_xyxy[0], mask_xyxy[3] - mask_xyxy[1]); // (left, top, width, height)
-        cvSetImageROI(SrcMask, roiRect);
+    // Obtain ROI image
+    IplImage* roiImg = cvCreateImage(cvSize(roiRect.width, roiRect.height), SrcMask->depth, 1);
+    cvCopy(SrcMask, roiImg, NULL);
 
-        // Obtain ROI image
-        IplImage* roiImg = cvCreateImage(cvSize(roiRect.width, roiRect.height), SrcMask->depth, 1);
-        cvCopy(SrcMask, roiImg, NULL);
+    // Obtain Resized Mask
+    IplImage* FinalMask = cvCreateImage(cvGetSize(*ImgSrc), roiImg->depth, 1);
+    cvResize(roiImg, FinalMask, CV_INTER_LINEAR);
 
-        // Obtain Resized Mask
-        IplImage* FinalMask = cvCreateImage(cvGetSize(*ImgSrc), roiImg->depth, 1);
-        cvResize(roiImg, FinalMask, CV_INTER_LINEAR);
+    // Draw Label and Task (int label to string)
+    plot_box_and_label("Pesudo Label", &obj->Rect, MASK_TRANSPARENCY, &FinalMask, ImgSrc);
 
-        // Draw Label and Task (int label to string)
-        plot_box_and_label("Pesudo Label", &Detections[i].Rect, MASK_TRANSPARENCY, &FinalMask, ImgSrc);
-
-        cvReleaseImage(&SrcMask);
-        cvReleaseImage(&roiImg);
-        cvReleaseImage(&FinalMask);
-    }
+    cvReleaseImage(&SrcMask);
+    cvReleaseImage(&roiImg);
+    cvReleaseImage(&FinalMask);
 }

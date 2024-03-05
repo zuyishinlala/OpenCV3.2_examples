@@ -253,56 +253,77 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
 }
 
 // Read Inputs + Pre-process of Inputs + NMS
-static inline void PreProcessing( float* Mask_Input, int* NumDetections, struct Object *ValidDetections, const char** argv){
+static inline void PreProcessing(struct Pred_Input* input, float* Mask_Input, int* NumDetections, struct Object *ValidDetections, const char** argv){
     char* Bboxtype = "xyxy";
     char* classes = NULL;
 
     // ========================
     // Init Inputs in Sources/Input.c
     // ========================
-    struct Pred_Input input;
 
     // 10 Inputs (9 prediction input + 1 mask input)
-    initPredInput_pesudo(&input, Mask_Input, argv);
+    initPredInput_pesudo(input, Mask_Input, argv);
 
     //sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
     
     //post_regpreds(input.reg_pred, Bboxtype);
     //printf("Post_RegPredictions on reg_preds Done\n");
 
-    non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
+    non_max_suppression_seg(input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
     printf("NMS Done,Got %d Detections...\n", *NumDetections);
 }
 
-// Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
-static inline void PostProcessing(int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH],uint8_t(*UncroppedMask)[TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH], IplImage** Img){
-    /*
-    for(int i = 0 ; i < NumDetections ; ++i){
-        uint8_t Mask[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH] = {0};
-        struct Object* Detect = &ValidDetections[i];
-        handle_proto_test(Detect, Mask_Input, Mask, cvGetSize(*Img));
-        rescalebox();
-        RescaleMaskandDrawLabel();
-    }
-    */
-    handle_proto_test(NumDetections, ValidDetections, Mask_Input, UncroppedMask, cvGetSize(*Img)); 
-    printf("Handled_proto_test for %d predicitons.\n", NumDetections);
+void DisplayMask(uint8_t* MaskData, int width, int height){
+    IplImage* SrcMask = cvCreateImageHeader(cvSize(width, height), IPL_DEPTH_8U, 1);   
+    cvSetData(SrcMask, MaskData, width);
 
-    rescalebox(NumDetections, ValidDetections, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
-    printf("Rescaled Box to real place.\n");
+    cvNamedWindow("Output", CV_WINDOW_AUTOSIZE);
+    cvShowImage("Output", SrcMask);
 
-    RescaleMaskandDrawLabel(NumDetections, ValidDetections, UncroppedMask, Img);
-    printf("Drawed Label and Rescaled Mask for %d detection.\n", NumDetections);
+    cvWaitKey(0);
+    cvDestroyWindow("Output");
+    cvReleaseImage(&SrcMask);
 }
 
-static inline void PrintNMSResult(int NumDetections, struct Object* ValidDetections){
+static inline void PrintDataPosition(int index ,struct Object* ValidDetections){
+    printf("====== Resacaled Index: %d======\n", index);
+    printf("Confidence: %f \n",ValidDetections->conf);    
+    printf("Label: %d \n",ValidDetections->label);    
+    printf("Box Position: %f, %f, %f, %f\n",ValidDetections->Rect.left, ValidDetections->Rect.top, ValidDetections->Rect.right, ValidDetections->Rect.bottom);
+}
+
+// Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
+void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage** Img){
+    for(int i = 0 ; i < 5 ; ++i){
+        uint8_t Mask[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH] = {0};
+        struct Object* Detect = &ValidDetections[i];
+        handle_proto_test(Detect, Mask_Input, Mask);
+        //DisplayMask(Mask, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT);
+        rescalebox(&Detect->Rect, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
+        PrintDataPosition(i, Detect);
+        //RescaleMaskandDrawLabel(Detect, Mask, &Img);
+    }
+    
+    //handle_proto_test(NumDetections, ValidDetections, Mask_Input, UncroppedMask, cvGetSize(*Img)); 
+    //printf("Handled_proto_test for %d predicitons.\n", NumDetections);
+
+    //
+    //printf("Rescaled Box to real place.\n");
+
+    //RescaleMaskandDrawLabel(NumDetections, ValidDetections, UncroppedMask, Img);
+    //printf("Drawed Label and Rescaled Mask for %d detection.\n", NumDetections);
+}
+
+
+static inline void PrintObjectData(int NumDetections, struct Object* ValidDetections){
     for(int i = 0 ; i < NumDetections ; ++i){
         printf("======Index: %d======\n", i);
         printf("Box Position: %f, %f, %f, %f\n",ValidDetections[i].Rect.left, ValidDetections[i].Rect.top, ValidDetections[i].Rect.right, ValidDetections[i].Rect.bottom);
         printf("Confidence: %f \n",ValidDetections[i].conf);
-        printf("Confidence: %d \n",ValidDetections[i].label);
-        printf("=====================\n");
+        printf("Label: %d \n",ValidDetections[i].label);
+        printf("First 3 mask coeffs: %f, %f, %f\n", ValidDetections[i].maskcoeff[0], ValidDetections[i].maskcoeff[1], ValidDetections[i].maskcoeff[2]);
     }
+    printf("======================");
 }
 
 int main(int argc, const char **argv)
@@ -316,20 +337,20 @@ int main(int argc, const char **argv)
     */
     //IplImage *Img32 = cvCreateImage(cvGetSize(Img), IPL_DEPTH_32F, 3);
     //cvConvertScale(Img, Img32, 1/255.f, 0);
-
+    struct Pred_Input input;
     float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH]; 
+    IplImage *Img = cvCreateImage(cvSize(1914, 1178), IPL_DEPTH_8U, 3);
 
     // Recorded Detections for NMS
     struct Object ValidDetections[MAX_DETECTIONS]; 
     int NumDetections = 0;
 
-    PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, argv);
-    PrintNMSResult(NumDetections, ValidDetections);
-    // Store Masks Results
-    //uint8_t UncropedMask[MAX_DETECTIONS][TRAINED_SIZE_HEIGHT*TRAINED_SIZE_WIDTH] = {0};
-    /*
-    PostProcessing(&NumDetections, ValidDetections, Mask_Input, UncropedMask, &Img);
+    PreProcessing(&input, &Mask_Input[0][0], &NumDetections, ValidDetections, argv);
+    //PrintObjectData(NumDetections, ValidDetections);
 
+    // Store Masks Results    
+    PostProcessing(NumDetections, ValidDetections, Mask_Input, &Img);
+    /*
     // ========================
     // Display Output
     // ========================
@@ -339,7 +360,69 @@ int main(int argc, const char **argv)
     // Wait for a key event and close the window
     cvWaitKey(0);
     cvDestroyAllWindows();
-
-    cvReleaseImage(&Img);
     */
+    printf("Image Released.");
+    cvReleaseImage(&Img);
+    return 0;
 }
+/*
+After NMS output
+======Index: 0======
+Box Position: 496.098450, 196.839951, 558.655457, 341.662231
+Confidence: 0.943630 
+Label: 0 
+First 3 mask coeffs: -0.002038, 0.035050, -0.093406
+======Index: 1======
+Box Position: 263.882141, 367.571228, 376.792908, 490.456238
+Confidence: 0.913981 
+Label: 16 
+First 3 mask coeffs: -0.032480, -0.185846, 0.176836
+======Index: 2======
+Box Position: 483.988342, 342.410767, 586.628845, 431.275635
+Confidence: 0.913909 
+Label: 16 
+First 3 mask coeffs: -0.078615, -0.105044, 0.319571
+======Index: 3======
+Box Position: 37.144051, 274.736267, 88.445816, 452.130920
+Confidence: 0.900443 
+Label: 0 
+First 3 mask coeffs: 0.048116, -0.035240, -0.068219
+======Index: 4======
+Box Position: 159.593872, 423.177673, 212.107727, 473.202698
+Confidence: 0.889873 
+Label: 16 
+First 3 mask coeffs: -0.180799, 0.274203, 0.087585
+======Index: 5======
+Box Position: 101.557365, 361.983704, 172.068848, 440.894104
+Confidence: 0.882814 
+Label: 16 
+First 3 mask coeffs: -0.124123, 0.136503, 0.259379
+======Index: 6======
+Box Position: 214.535736, 301.623230, 266.269531, 382.887878
+Confidence: 0.864283 
+Label: 0 
+First 3 mask coeffs: -0.112651, 0.309662, -0.076536
+======Index: 7======
+Box Position: 350.345337, 290.823669, 372.778992, 339.081116
+Confidence: 0.788122 
+Label: 0 
+First 3 mask coeffs: -0.427509, 0.263954, -0.555481
+======Index: 8======
+Box Position: 336.352234, 317.848511, 362.574158, 371.942871
+Confidence: 0.739948 
+Label: 0 
+First 3 mask coeffs: -0.114220, 0.482586, -0.248823
+======Index: 9======
+Box Position: 260.837372, 297.721680, 278.164764, 326.434387
+Confidence: 0.422207 
+Label: 0 
+First 3 mask coeffs: -0.073450, 0.230403, -0.755010
+======================
+*/
+
+/*
+tensor([[1.48400e+03, 2.21000e+02, 1.67100e+03, 6.54000e+02, 9.43630e-01, 0.00000e+00],
+        [7.89000e+02, 7.31000e+02, 1.12700e+03, 1.09900e+03, 9.13981e-01, 1.60000e+01],
+        [1.44700e+03, 6.56000e+02, 1.75400e+03, 9.22000e+02, 9.13909e-01, 1.60000e+01],
+        [1.11000e+02, 4.54000e+02, 2.65000e+02, 9.84000e+02, 9.00443e-01, 0.00000e+00]])
+*/
