@@ -104,22 +104,27 @@ static void plot_box_and_label(const char* label, const struct Bbox* box, float 
     // Draw Mask
     cvAddWeighted(*ImgSrc, 1.f - mask_transparency, MaskedImg, mask_transparency, 0, *ImgSrc);
 
+    int left = (int)box->left, top = (int)box->top;
     // Draw Bounding Box
-    CvPoint tlp = cvPoint((int)box->left, (int)box->top);
+    CvPoint tlp = cvPoint(left , top);
     CvPoint brp = cvPoint((int)box->right, (int)box->bottom);
     cvRectangle(*ImgSrc, tlp, brp, BLUE, boxthickness, CV_AA, 0);
 
     int baseLine;
     CvSize label_size; 
     CvFont font; // font for text
-    cvInitFont(&font, CV_FONT_HERSHEY_COMPLEX, 0.5, 0.8, 0, 2, CV_AA);
+    cvInitFont(&font, CV_FONT_HERSHEY_COMPLEX, 0.5, 0.5, 0, 2, CV_AA);
 
     cvGetTextSize(label, &font, &label_size, &baseLine);
-    brp = cvPoint(box->left + label_size.width, box->top + label_size.height + baseLine);
+
+    brp.x = left + label_size.width;
+    brp.y = top;
+    tlp.y -= (label_size.height+baseLine);
+
     // Draw Background
     cvRectangle(*ImgSrc, tlp, brp, BLUE, CV_FILLED, CV_AA, 0);
     // Draw Label
-    cvPutText(*ImgSrc, label, cvPoint(box->left, box->top + label_size.height), &font, WHITE);
+    cvPutText(*ImgSrc, label, cvPoint(left, top - baseLine), &font, WHITE);
     cvReleaseImage(&MaskedImg);
 }
 

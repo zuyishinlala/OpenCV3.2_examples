@@ -260,7 +260,6 @@ static inline void PreProcessing(struct Pred_Input* input, float* Mask_Input, in
     // ========================
     // Init Inputs in Sources/Input.c
     // ========================
-
     // 10 Inputs (9 prediction input + 1 mask input)
     initPredInput_pesudo(input, Mask_Input, argv);
 
@@ -299,7 +298,7 @@ void PostProcessing(const int NumDetections, struct Object *ValidDetections, con
     getMaskxyxy(mask_xyxy,  TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
     //printf("%d %d %d %d\n", mask_xyxy[0], mask_xyxy[1], mask_xyxy[2], mask_xyxy[3]);
 
-    for(int i = 0 ; i < 5 ; ++i){
+    for(int i = 0 ; i < NumDetections ; ++i){
         memset(Mask, 0, MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH * sizeof(uint8_t));
         struct Object* Detect = &ValidDetections[i];
         handle_proto_test(Detect, Mask_Input, Mask);
