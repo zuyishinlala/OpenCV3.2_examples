@@ -294,35 +294,18 @@ static inline void PrintDataPosition(int index ,struct Object* ValidDetections){
 
 
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
-void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage** Img){
+void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage** Img, uint8_t* Mask){
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
     getMaskxyxy(mask_xyxy,  TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
     //printf("%d %d %d %d\n", mask_xyxy[0], mask_xyxy[1], mask_xyxy[2], mask_xyxy[3]);
-    
-    for(int i = 0 ; i < 0 ; ++i){
-        uint8_t Mask[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH] = {0};
+
+    for(int i = 0 ; i < 5 ; ++i){
+        memset(Mask, 0, MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH * sizeof(uint8_t));
         struct Object* Detect = &ValidDetections[i];
         handle_proto_test(Detect, Mask_Input, Mask);
-        //DisplayMask(&Mask[0], TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT);
         rescalebox(&Detect->Rect, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
-        //PrintDataPosition(i, Detect);
         RescaleMaskandDrawLabel(Detect, Mask, Img, mask_xyxy);
     }
-
-    uint8_t Mask[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH] = {0};
-    struct Object* Detect = &ValidDetections[0];
-    handle_proto_test(Detect, Mask_Input, Mask);
-    IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
-    cvSetData(SrcMask, Mask, TRAINED_SIZE_WIDTH);
-
-    cvNamedWindow("Output", CV_WINDOW_AUTOSIZE);
-    cvShowImage("Output", SrcMask);
-
-    cvWaitKey(0);
-    cvDestroyWindow("Output");
-    
-    //RescaleMaskandDrawLabel(Detect, Mask, Img, mask_xyxy);
-
     //handle_proto_test(NumDetections, ValidDetections, Mask_Input, UncroppedMask, cvGetSize(*Img)); 
     //printf("Handled_proto_test for %d predicitons.\n", NumDetections);
 
@@ -331,7 +314,6 @@ void PostProcessing(const int NumDetections, struct Object *ValidDetections, con
 
     //RescaleMaskandDrawLabel(NumDetections, ValidDetections, UncroppedMask, Img);
     //printf("Drawed Label and Rescaled Mask for %d detection.\n", NumDetections);
-    cvReleaseImage(&SrcMask);
 }
 
 
@@ -358,8 +340,10 @@ int main(int argc, const char **argv)
     //IplImage *Img32 = cvCreateImage(cvGetSize(Img), IPL_DEPTH_32F, 3);
     //cvConvertScale(Img, Img32, 1/255.f, 0);
     struct Pred_Input input;
-    float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH]; 
-    IplImage *Img = cvCreateImage(cvSize(1178, 1914), IPL_DEPTH_8U, 3);
+    float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
+
+    static uint8_t Mask[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH] = {0};
+    IplImage *Img = cvCreateImage(cvSize(957, 589), IPL_DEPTH_8U, 3);
 
     // Recorded Detections for NMS
     struct Object ValidDetections[MAX_DETECTIONS]; 
@@ -370,7 +354,7 @@ int main(int argc, const char **argv)
     //PrintObjectData(NumDetections, ValidDetections);
 
     // Store Masks Results    
-    PostProcessing(NumDetections, ValidDetections, Mask_Input, &Img);
+    PostProcessing(NumDetections, ValidDetections, Mask_Input, &Img, Mask);
     
     // ========================
     // Display Output
@@ -383,7 +367,7 @@ int main(int argc, const char **argv)
     cvDestroyAllWindows();
     
     cvReleaseImage(&Img);
-    printf("Image Released.");
+    printf("Original Image Released.");
     return 0;
 }
 /*
