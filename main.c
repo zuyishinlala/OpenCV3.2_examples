@@ -157,12 +157,6 @@ float intersection_area(struct Bbox box1, struct Bbox box2) {
 // Perform NMS
 // ========================================
 static void nms_sorted_bboxes(const struct Object* faceobjects, int size, struct Object* picked_object, int *CountValidDetect) {
-    /*
-    - Extract box with obj confidence > conf_threshold and prob > conf_threshold
-    - For prob in each grids: class prob *=  Obj confidence 
-    - Find the max object probability and the class index 
-    - Extract boxes with class prob > conf_threshold
-    */
     if(size == 0)
         return;
     // Calculated areas
@@ -263,26 +257,15 @@ static inline void PreProcessing(struct Pred_Input* input, float* Mask_Input, in
     // 10 Inputs (9 prediction input + 1 mask input)
     initPredInput_pesudo(input, Mask_Input, argv);
 
-    //sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
+    sigmoid(ROWSIZE, NUM_CLASSES, &input->cls_pred[0][0]);
     
-    //post_regpreds(input.reg_pred, Bboxtype);
+    post_regpreds(input->reg_pred, Bboxtype);
     //printf("Post_RegPredictions on reg_preds Done\n");
 
     non_max_suppression_seg(input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
     printf("NMS Done,Got %d Detections...\n", *NumDetections);
 }
 
-void DisplayMask(uint8_t* MaskData, int width, int height){
-    IplImage* SrcMask = cvCreateImageHeader(cvSize(width, height), IPL_DEPTH_8U, 1);   
-    cvSetData(SrcMask, MaskData, width);
-
-    cvNamedWindow("Output", CV_WINDOW_AUTOSIZE);
-    cvShowImage("Output", SrcMask);
-
-    cvWaitKey(0);
-    cvDestroyWindow("Output");
-    cvReleaseImage(&SrcMask);
-}
 
 static inline void PrintDataPosition(int index ,struct Object* ValidDetections){
     printf("====== Resacaled Index: %d======\n", index);
@@ -294,16 +277,25 @@ static inline void PrintDataPosition(int index ,struct Object* ValidDetections){
 
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
 void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage** Img, uint8_t* Mask){
+
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
     getMaskxyxy(mask_xyxy,  TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
     //printf("%d %d %d %d\n", mask_xyxy[0], mask_xyxy[1], mask_xyxy[2], mask_xyxy[3]);
 
     for(int i = 0 ; i < NumDetections ; ++i){
+
         memset(Mask, 0, MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH * sizeof(uint8_t));
         struct Object* Detect = &ValidDetections[i];
+
         handle_proto_test(Detect, Mask_Input, Mask);
+
         rescalebox(&Detect->Rect, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
-        RescaleMaskandDrawLabel(Detect, Mask, Img, mask_xyxy);
+
+        RescaleMaskandDrawMask(Detect, Mask, Img, mask_xyxy);
+    }
+
+    for(int i = 0 ; i < NumDetections ; ++i){
+        DrawLabel("Label", &ValidDetections[i].Rect, Img);
     }
     //handle_proto_test(NumDetections, ValidDetections, Mask_Input, UncroppedMask, cvGetSize(*Img)); 
     //printf("Handled_proto_test for %d predicitons.\n", NumDetections);
@@ -324,7 +316,7 @@ static inline void PrintObjectData(int NumDetections, struct Object* ValidDetect
         printf("Label: %d \n",ValidDetections[i].label);
         printf("First 3 mask coeffs: %f, %f, %f\n", ValidDetections[i].maskcoeff[0], ValidDetections[i].maskcoeff[1], ValidDetections[i].maskcoeff[2]);
     }
-    printf("======================");
+    printf("======================\n");
 }
 
 int main(int argc, const char **argv)
@@ -358,8 +350,8 @@ int main(int argc, const char **argv)
     // ========================
     // Display Output
     // ========================
-    cvNamedWindow("Last Output", CV_WINDOW_AUTOSIZE);
-    cvShowImage("Last Output", Img);
+    cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
+    cvShowImage("Final Output", Img);
 
     // Wait for a key event and close the window
     cvWaitKey(0);

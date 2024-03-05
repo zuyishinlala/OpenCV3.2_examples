@@ -93,17 +93,19 @@ static void rescalebox(struct Bbox *Box, float src_size_w, float src_size_h, flo
 }
 
 // Plot Label and Bounding Box
-static void plot_box_and_label(const char* label, const struct Bbox* box, float mask_transparency, IplImage** mask, IplImage** ImgSrc){
-    int boxthickness = 2;
-    CvScalar BLUE = CV_RGB(50, 178, 255);
-    CvScalar WHITE = CV_RGB(240, 240, 240);
-
+static void DrawMask(const struct Bbox* box, float mask_transparency, IplImage** mask, IplImage** ImgSrc){
     IplImage* MaskedImg = cvCloneImage(*ImgSrc);
     cvSet(MaskedImg, CV_RGB(0, 0, 255), *mask); //Specify the color
 
     // Draw Mask
     cvAddWeighted(*ImgSrc, 1.f - mask_transparency, MaskedImg, mask_transparency, 0, *ImgSrc);
+    cvReleaseImage(&MaskedImg);
+}
 
+static void DrawLabel(const char* label, const struct Bbox* box, IplImage** ImgSrc){
+    int boxthickness = 2;
+    CvScalar BLUE = CV_RGB(50, 178, 255);
+    CvScalar WHITE = CV_RGB(240, 240, 240);
     int left = (int)box->left, top = (int)box->top;
     // Draw Bounding Box
     CvPoint tlp = cvPoint(left , top);
@@ -113,7 +115,7 @@ static void plot_box_and_label(const char* label, const struct Bbox* box, float 
     int baseLine;
     CvSize label_size; 
     CvFont font; // font for text
-    cvInitFont(&font, CV_FONT_HERSHEY_COMPLEX, 0.5, 0.5, 0, 2, CV_AA);
+    cvInitFont(&font, CV_FONT_HERSHEY_COMPLEX, 0.5, 0.5, 0, boxthickness, CV_AA);
 
     cvGetTextSize(label, &font, &label_size, &baseLine);
 
@@ -125,7 +127,6 @@ static void plot_box_and_label(const char* label, const struct Bbox* box, float 
     cvRectangle(*ImgSrc, tlp, brp, BLUE, CV_FILLED, CV_AA, 0);
     // Draw Label
     cvPutText(*ImgSrc, label, cvPoint(left, top - baseLine), &font, WHITE);
-    cvReleaseImage(&MaskedImg);
 }
 
 static inline void getMaskxyxy(int* xyxy, float org_size_w, float org_size_h, float tar_size_w, float tar_size_h){
@@ -139,7 +140,7 @@ static inline void getMaskxyxy(int* xyxy, float org_size_w, float org_size_h, fl
 }
 
 //Obtain final mask (size : ORG_SIZE_HEIGHT, ORG_SIZE_WIDTH) and draw label
-void RescaleMaskandDrawLabel(struct Object* obj, uint8_t* UnCropedMask, IplImage** ImgSrc, int* mask_xyxy){
+void RescaleMaskandDrawMask(struct Object* obj, uint8_t* UnCropedMask, IplImage** ImgSrc, int* mask_xyxy){
 
     // uint8_t array to IplImage
     IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
@@ -158,7 +159,7 @@ void RescaleMaskandDrawLabel(struct Object* obj, uint8_t* UnCropedMask, IplImage
     cvResize(roiImg, FinalMask, CV_INTER_LINEAR);
 
     // Draw Label and Task (int label to string)
-    plot_box_and_label("Pesudo Label", &obj->Rect, MASK_TRANSPARENCY, &FinalMask, ImgSrc);
+    DrawMask(&obj->Rect, MASK_TRANSPARENCY, &FinalMask, ImgSrc);
 
     cvReleaseImage(&SrcMask);
     cvReleaseImage(&roiImg);
