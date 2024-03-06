@@ -45,9 +45,9 @@ static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struc
             dc = (dc < 0.f) ? 1.0f : ((dc > src_width - 1.0f) ? 0.f : dc - ic);
 
             PixelSum =     dc *  dr * GetPixel(ic + 1, ir + 1, src_height, src_width, Src) + 
-                     (1 - dc) *  dr * GetPixel(    ic, ir + 1, src_height, src_width, Src) +
-                      dc * (1 - dr) * GetPixel(ic + 1,     ir, src_height, src_width, Src) +
-                (1 - dc) * (1 - dr) * GetPixel(    ic,     ir, src_height, src_width, Src);
+                     (1 - dc) *  dr * GetPixel(ic    , ir + 1, src_height, src_width, Src) +
+                      dc * (1 - dr) * GetPixel(ic + 1, ir    , src_height, src_width, Src) +
+                (1 - dc) * (1 - dr) * GetPixel(ic    , ir    , src_height, src_width, Src);
             *(Tar + r * TRAINED_SIZE_WIDTH + c) = (PixelSum > Threshold) ? 255 : 0;
         }
     }
@@ -140,7 +140,7 @@ static inline void getMaskxyxy(int* xyxy, float org_size_w, float org_size_h, fl
 }
 
 //Obtain final mask (size : ORG_SIZE_HEIGHT, ORG_SIZE_WIDTH) and draw label
-void RescaleMaskandDrawMask(struct Object* obj, uint8_t* UnCropedMask, IplImage** ImgSrc, int* mask_xyxy){
+static void RescaleMaskandDrawMask(struct Object* obj, uint8_t* UnCropedMask, IplImage** ImgSrc, int* mask_xyxy){
 
     // uint8_t array to IplImage
     IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   

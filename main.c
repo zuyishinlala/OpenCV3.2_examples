@@ -246,24 +246,46 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     return;
 }
 
+static void CopyMaskCoeffs(float (*DstCoeffs)[32], const int NumDetections, struct Object *ValidDetections){
+    for(int i = 0 ; i < NumDetections ; ++i){
+        memcpy(DstCoeffs[i], ValidDetections[i].maskcoeff, sizeof(float) * NUM_MASKS);
+        ValidDetections[i].maskcoeff = &DstCoeffs[i][0];
+    }
+}
+
+static inline void PrintObjectData(int NumDetections, struct Object* ValidDetections){
+    for(int i = 0 ; i < NumDetections ; ++i){
+        printf("======Index: %d======\n", i);
+        printf("Box Position: %f, %f, %f, %f\n",ValidDetections[i].Rect.left, ValidDetections[i].Rect.top, ValidDetections[i].Rect.right, ValidDetections[i].Rect.bottom);
+        printf("Confidence: %f \n",ValidDetections[i].conf);
+        printf("Label: %d \n",ValidDetections[i].label);
+        printf("First 3 mask coeffs: %f, %f, %f\n", ValidDetections[i].maskcoeff[0], ValidDetections[i].maskcoeff[1], ValidDetections[i].maskcoeff[2]);
+    }
+    printf("======================\n");
+}
+
 // Read Inputs + Pre-process of Inputs + NMS
-static inline void PreProcessing(struct Pred_Input* input, float* Mask_Input, int* NumDetections, struct Object *ValidDetections, const char** argv){
+static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct Object *ValidDetections, float (*MaskCoeffs)[32], const char** argv){
     char* Bboxtype = "xyxy";
     char* classes = NULL;
 
+    struct Pred_Input input;
     // ========================
     // Init Inputs in Sources/Input.c
     // ========================
     // 10 Inputs (9 prediction input + 1 mask input)
-    initPredInput_pesudo(input, Mask_Input, argv);
+    initPredInput_pesudo(&input, Mask_Input, argv);
 
-    sigmoid(ROWSIZE, NUM_CLASSES, &input->cls_pred[0][0]);
+    //sigmoid(ROWSIZE, NUM_CLASSES, &input->cls_pred[0][0]);
     
-    post_regpreds(input->reg_pred, Bboxtype);
+    //post_regpreds(input->reg_pred, Bboxtype);
     //printf("Post_RegPredictions on reg_preds Done\n");
 
-    non_max_suppression_seg(input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
+    non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
     printf("NMS Done,Got %d Detections...\n", *NumDetections);
+
+    CopyMaskCoeffs(MaskCoeffs, *NumDetections, ValidDetections);
+    //PrintObjectData(*NumDetections, ValidDetections);
 }
 
 
@@ -276,7 +298,7 @@ static inline void PrintDataPosition(int index ,struct Object* ValidDetections){
 
 
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
-void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage** Img, uint8_t* Mask){
+static void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage** Img, uint8_t* Mask){
 
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
     getMaskxyxy(mask_xyxy,  TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
@@ -287,6 +309,7 @@ void PostProcessing(const int NumDetections, struct Object *ValidDetections, con
         memset(Mask, 0, MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH * sizeof(uint8_t));
         struct Object* Detect = &ValidDetections[i];
 
+        // May cause "SEGMENTATION FAULTz" contributed by memory out of bound
         handle_proto_test(Detect, Mask_Input, Mask);
 
         rescalebox(&Detect->Rect, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
@@ -308,17 +331,6 @@ void PostProcessing(const int NumDetections, struct Object *ValidDetections, con
 }
 
 
-static inline void PrintObjectData(int NumDetections, struct Object* ValidDetections){
-    for(int i = 0 ; i < NumDetections ; ++i){
-        printf("======Index: %d======\n", i);
-        printf("Box Position: %f, %f, %f, %f\n",ValidDetections[i].Rect.left, ValidDetections[i].Rect.top, ValidDetections[i].Rect.right, ValidDetections[i].Rect.bottom);
-        printf("Confidence: %f \n",ValidDetections[i].conf);
-        printf("Label: %d \n",ValidDetections[i].label);
-        printf("First 3 mask coeffs: %f, %f, %f\n", ValidDetections[i].maskcoeff[0], ValidDetections[i].maskcoeff[1], ValidDetections[i].maskcoeff[2]);
-    }
-    printf("======================\n");
-}
-
 int main(int argc, const char **argv)
 {
     /*
@@ -330,8 +342,8 @@ int main(int argc, const char **argv)
     */
     //IplImage *Img32 = cvCreateImage(cvGetSize(Img), IPL_DEPTH_32F, 3);
     //cvConvertScale(Img, Img32, 1/255.f, 0);
-    struct Pred_Input input;
     float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
+    float Mask_Coeffs[MAX_DETECTIONS][32];
 
     static uint8_t Mask[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH] = {0};
     IplImage *Img = cvCreateImage(cvSize(957, 589), IPL_DEPTH_8U, 3);
@@ -341,7 +353,7 @@ int main(int argc, const char **argv)
     int NumDetections = 0;
 
     // Preprocessing + NMS 
-    PreProcessing(&input, &Mask_Input[0][0], &NumDetections, ValidDetections, argv);
+    PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, Mask_Coeffs, argv);
     //PrintObjectData(NumDetections, ValidDetections);
 
     // Store Masks Results    
@@ -350,13 +362,14 @@ int main(int argc, const char **argv)
     // ========================
     // Display Output
     // ========================
+    /*
     cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
     cvShowImage("Final Output", Img);
 
     // Wait for a key event and close the window
     cvWaitKey(0);
     cvDestroyAllWindows();
-    
+    */
     cvReleaseImage(&Img);
     printf("Original Image Released.");
     return 0;
