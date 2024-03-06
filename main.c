@@ -22,9 +22,9 @@ static void post_regpreds(float (*distance)[4], char *type)
     float row_bound = HEIGHT0, col_bound = WIDTH0;
     for (int stride_index = 0; stride_index < 3; ++stride_index)
     {
-        for (float anchor_points_r = 0.5; anchor_points_r < row_bound; ++anchor_points_r)
+        for (float anchor_points_r = 0.5f; anchor_points_r < row_bound; ++anchor_points_r)
         {
-            for (float anchor_points_c = 0.5; anchor_points_c < col_bound; ++anchor_points_c)
+            for (float anchor_points_c = 0.5f; anchor_points_c < col_bound; ++anchor_points_c)
             {
                 float *data = &distance[row][0]; // left, top, right, bottom
 
@@ -147,7 +147,7 @@ static float intersection_area(const struct Bbox a, const struct Bbox b) {
 // ========================================
 // Calculate intersection area -- xyxy(left, top, bottom, right)
 // ========================================
-float intersection_area(struct Bbox box1, struct Bbox box2) {
+static float intersection_area(struct Bbox box1, struct Bbox box2) {
     float width = fminf(box1.right, box2.right) - fmaxf(box1.left, box2.left);
     float height = fminf(box1.bottom, box2.bottom) - fmaxf(box1.top, box2.top);
     return (width < 0 || height < 0) ?  0 : width * height;
@@ -287,7 +287,7 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
 
 
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
-static void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage* Img, uint8_t* Mask, CvScalar TextColor){
+static inline void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage* Img, uint8_t* Mask, CvScalar TextColor){
     printf("Drawing Labels and Segments...\n");
 
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
@@ -347,7 +347,7 @@ int main(int argc, const char **argv)
     // ========================
     // Display Output
     // ========================
-    /*
+    
     cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
     cvShowImage("Final Output", Img);
 
@@ -356,7 +356,7 @@ int main(int argc, const char **argv)
     // Wait for a key event and close the window
     cvWaitKey(0);
     cvDestroyAllWindows();
-    */
+    
     cvReleaseImage(&Img);
     //cvReleaseImage(&Img32);
     printf("Original Image Released.");

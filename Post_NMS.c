@@ -7,6 +7,7 @@
 #include <opencv/cxcore.h>
 #include <opencv2/imgcodecs/imgcodecs_c.h>
 #include <opencv/highgui.h>
+#include <omp.h>
 
 #include <math.h>
 int cvRound(double value) {return(ceil(value));}
@@ -72,22 +73,21 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
     struct Bbox box = obj->Rect;
    
     float Binary_Thres = 0.5f;
-    float pred_mask[MASK_SIZE_HEIGHT][MASK_SIZE_WIDTH] = {0};
-    float* mask_ptr = &pred_mask[0][0];
+    float pred_mask[MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH] = {0};
 
     // Obtain Uncropped Mask (size 160*160)
-    for(int i = 0 ; i < MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH ; ++i, ++mask_ptr){
+    for(int i = 0 ; i < MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH ; ++i){
         float Pixel = 0.f;
         for(int c = 0 ; c < NUM_MASKS ; ++c){
             Pixel += maskcoeffs[c] * masks[c][i];
         }
-        *mask_ptr = Pixel;
+        pred_mask[i] = Pixel;
     }
 
-    sigmoid(MASK_SIZE_HEIGHT, MASK_SIZE_WIDTH, &pred_mask[0][0]);
+    sigmoid(MASK_SIZE_HEIGHT, MASK_SIZE_WIDTH, pred_mask);
     // Bilinear Interpolate + Binary Threshold 
     // Obtain Uncropped Mask (size 640 * 640)
-    BilinearInterpolate(&pred_mask[0][0], UncroppedMask, Binary_Thres, box);
+    BilinearInterpolate(pred_mask, UncroppedMask, Binary_Thres, box);
 }
 
 // Rescale Bbox: Bounding Box positions to Real place
