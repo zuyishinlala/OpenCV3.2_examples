@@ -259,7 +259,6 @@ static inline void PrintObjectData(int NumDetections, struct Object* ValidDetect
         printf("Box Position: %f, %f, %f, %f\n",ValidDetections[i].Rect.left, ValidDetections[i].Rect.top, ValidDetections[i].Rect.right, ValidDetections[i].Rect.bottom);
         printf("Confidence: %f \n",ValidDetections[i].conf);
         printf("Label: %d \n",ValidDetections[i].label);
-        printf("First 3 mask coeffs: %f, %f, %f\n", ValidDetections[i].maskcoeff[0], ValidDetections[i].maskcoeff[1], ValidDetections[i].maskcoeff[2]);
     }
     printf("======================\n");
 }
@@ -271,15 +270,13 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
 
     struct Pred_Input input;
     // ========================
-    // Init Inputs in Sources/Input.c
+    // Init Inputs(9 prediction input + 1 mask input) in Sources/Input.c
     // ========================
-    // 10 Inputs (9 prediction input + 1 mask input)
     initPredInput_pesudo(&input, Mask_Input, argv);
 
     //sigmoid(ROWSIZE, NUM_CLASSES, &input->cls_pred[0][0]);
     
     //post_regpreds(input->reg_pred, Bboxtype);
-    //printf("Post_RegPredictions on reg_preds Done\n");
 
     non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
     printf("NMS Done,Got %d Detections...\n", *NumDetections);
@@ -289,64 +286,52 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
 }
 
 
-static inline void PrintDataPosition(int index ,struct Object* ValidDetections){
-    printf("====== Resacaled Index: %d======\n", index);
-    printf("Confidence: %f \n",ValidDetections->conf);    
-    printf("Label: %d \n",ValidDetections->label);    
-    printf("Box Position: %f, %f, %f, %f\n",ValidDetections->Rect.left, ValidDetections->Rect.top, ValidDetections->Rect.right, ValidDetections->Rect.bottom);
-}
-
-
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
 static void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage** Img, uint8_t* Mask){
+    printf("Drawing Labels and Segments...\n");
 
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
     getMaskxyxy(mask_xyxy,  TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
-    //printf("%d %d %d %d\n", mask_xyxy[0], mask_xyxy[1], mask_xyxy[2], mask_xyxy[3]);
+    int mask_size_w = TRAINED_SIZE_WIDTH;
+    int mask_size_h = TRAINED_SIZE_HEIGHT;
 
     for(int i = 0 ; i < NumDetections ; ++i){
 
-        memset(Mask, 0, MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH * sizeof(uint8_t));
+        memset(Mask, 0, mask_size_w * mask_size_h * sizeof(uint8_t));
         struct Object* Detect = &ValidDetections[i];
-
-        // May cause "SEGMENTATION FAULTz" contributed by memory out of bound
+        // May cause "SEGMENTATION FAULT" contributed by memory out of bound (> 640 or < 0) in BilinearInterpolation
         handle_proto_test(Detect, Mask_Input, Mask);
 
         rescalebox(&Detect->Rect, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, (*Img)->width, (*Img)->height);
-
         RescaleMaskandDrawMask(Detect, Mask, Img, mask_xyxy);
     }
+    printf("Drew All Masks...\n");
 
-    for(int i = 0 ; i < NumDetections ; ++i){
+    for(int i = 0 ; i <  NumDetections  ; ++i){
         DrawLabel("Label", &ValidDetections[i].Rect, Img);
     }
-    //handle_proto_test(NumDetections, ValidDetections, Mask_Input, UncroppedMask, cvGetSize(*Img)); 
-    //printf("Handled_proto_test for %d predicitons.\n", NumDetections);
-
-    //
-    //printf("Rescaled Box to real place.\n");
-
-    //RescaleMaskandDrawLabel(NumDetections, ValidDetections, UncroppedMask, Img);
-    //printf("Drawed Label and Rescaled Mask for %d detection.\n", NumDetections);
+    printf("Drew All Lables...\n");
+    printf("Drew Complete.\n");
 }
 
 
 int main(int argc, const char **argv)
 {
-    /*
-    IplImage* Img = cvLoadImage( argv[1], CV_LOAD_IMAGE_COLOR);
+    
+    IplImage* Img = cvLoadImage( argv[5], CV_LOAD_IMAGE_COLOR);
     if(!Img){
         printf("---No Img---\n");
-        return;
+        return 0;
     }
-    */
-    //IplImage *Img32 = cvCreateImage(cvGetSize(Img), IPL_DEPTH_32F, 3);
-    //cvConvertScale(Img, Img32, 1/255.f, 0);
+    int CVMUL = 0;
+    IplImage *Img32 = cvCreateImage(cvGetSize(Img), IPL_DEPTH_32F, 3);
+    cvConvertScale(Img, Img32, 1/255.f, 0);
+
     float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
     float Mask_Coeffs[MAX_DETECTIONS][32];
 
     static uint8_t Mask[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH] = {0};
-    IplImage *Img = cvCreateImage(cvSize(957, 589), IPL_DEPTH_8U, 3);
+    //IplImage *Img = cvCreateImage(cvSize(957, 589), IPL_DEPTH_8U, 3);
 
     // Recorded Detections for NMS
     struct Object ValidDetections[MAX_DETECTIONS]; 
@@ -356,21 +341,27 @@ int main(int argc, const char **argv)
     PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, Mask_Coeffs, argv);
     //PrintObjectData(NumDetections, ValidDetections);
 
-    // Store Masks Results    
+    // Store Masks Results
+    
     PostProcessing(NumDetections, ValidDetections, Mask_Input, &Img, Mask);
+    //CVMUL = 1;
+    //PostProcessing(NumDetections, ValidDetections, Mask_Input, &Img32, Mask, CVMUL);
+    
     
     // ========================
     // Display Output
     // ========================
-    /*
     cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
     cvShowImage("Final Output", Img);
 
+    //cvNamedWindow("Final Output32", CV_WINDOW_AUTOSIZE);
+    //cvShowImage("Final Output32", Img32);
     // Wait for a key event and close the window
     cvWaitKey(0);
     cvDestroyAllWindows();
-    */
+
     cvReleaseImage(&Img);
+    cvReleaseImage(&Img32);
     printf("Original Image Released.");
     return 0;
 }

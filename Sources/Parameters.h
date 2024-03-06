@@ -31,6 +31,6 @@
 #define ANCHOR_BASED 0
 
 // OpenCV parameters for drawing
-#define MASK_TRANSPARENCY 0.8f // 0 to 1
+#define MASK_TRANSPARENCY 0.5f // 0 to 1
 
 #endif
