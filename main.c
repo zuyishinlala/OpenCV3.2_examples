@@ -272,11 +272,11 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
     // ========================
     // Init Inputs(9 prediction input + 1 mask input) in Sources/Input.c
     // ========================
-    initPredInput_pesudo(&input, Mask_Input, argv);
+    initPredInput(&input, Mask_Input, argv);
 
-    //sigmoid(ROWSIZE, NUM_CLASSES, &input->cls_pred[0][0]);
+    sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
     
-    //post_regpreds(input->reg_pred, Bboxtype);
+    post_regpreds(input.reg_pred, Bboxtype);
 
     non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
     printf("NMS Done,Got %d Detections...\n", *NumDetections);
@@ -306,9 +306,17 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
     printf("Drew %d Masks...\n", NumDetections);
 
     int Thickness = (int) fmaxf(roundf((Img->width + Img->height) / 2.f * 0.003f), 2);
-    for(int i = 0 ; i < NumDetections  ; ++i){
+    for(int i = NumDetections - 1 ; i > -1  ; --i){
+
+        //String Append Label + Confidence
         char* Label = GetClassName(ValidDetections[i].label);
-        DrawLabel(ValidDetections[i].Rect, ValidDetections[i].label, Label, Thickness, TextColor, Img);
+        char FinalLabel[20];
+        strcpy(FinalLabel, Label);
+        size_t len = strlen(FinalLabel);
+        FinalLabel[len] = ' ';
+        sprintf(FinalLabel + len + 1, "%.2f", ValidDetections[i].conf);
+
+        DrawLabel(ValidDetections[i].Rect, ValidDetections[i].label, FinalLabel, Thickness, TextColor, Img);
     }
 
     printf("Drew %d Lables...\n", NumDetections);
@@ -318,21 +326,17 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
 
 int main(int argc, const char **argv)
 {
-    IplImage* Img = cvLoadImage( argv[5], CV_LOAD_IMAGE_COLOR);
+    IplImage* Img = cvLoadImage( argv[1], CV_LOAD_IMAGE_COLOR);
     if(!Img){
         printf("---No Img---\n");
         return 0;
     }
-    int CVMUL = 0;
     CvScalar TextColor = CV_RGB(255, 255, 255);
-    IplImage *Img32 = cvCreateImage(cvGetSize(Img), IPL_DEPTH_32F, 3);
-    cvConvertScale(Img, Img32, 1/255.f, 0);
 
     float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
     float Mask_Coeffs[MAX_DETECTIONS][32];
 
     static uint8_t Mask[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH] = {0};
-    //IplImage *Img = cvCreateImage(cvSize(957, 589), IPL_DEPTH_8U, 3);
 
     // Recorded Detections for NMS
     struct Object ValidDetections[MAX_DETECTIONS]; 
@@ -348,20 +352,14 @@ int main(int argc, const char **argv)
     // ========================
     // Display Output
     // ========================
-    
-    //cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
-    //cvShowImage("Final Output", Img32);
 
-    // cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
-    // cvShowImage("Final Output", Img);
-    // // Wait for a key event and close the window
-    // cvWaitKey(0);
-    // cvDestroyAllWindows();
+    cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
+    cvShowImage("Final Output", Img);
+    cvWaitKey(0);
+    cvDestroyAllWindows();
 
     cvSaveImage("Result.jpg", Img, 0);
     cvReleaseImage(&Img);
-    //cvSaveImage("Result_IMG32.jpg", Img32, 0);
-    cvReleaseImage(&Img32);
     printf("Original Image Released.");
     return 0;
 }
