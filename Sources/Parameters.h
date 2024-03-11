@@ -21,8 +21,8 @@
 #define ROWSIZE HEIGHT0*WIDTH0 + HEIGHT1*WIDTH1 + HEIGHT2*WIDTH2
 
 #define MAX_DETECTIONS 20
-#define CONF_THRESHOLD 0.3f
-#define NMS_THRESHOLD 0.5f
+#define CONF_THRESHOLD 0.25f
+#define NMS_THRESHOLD 0.45f
 
 // Bool
 #define AGNOSTIC 0
@@ -31,6 +31,6 @@
 #define ANCHOR_BASED 0
 
 // OpenCV parameters for drawing
-#define MASK_TRANSPARENCY 0.5f // 0 to 1
+#define MASK_TRANSPARENCY 0.8f // 0 to 1
 
 #endif

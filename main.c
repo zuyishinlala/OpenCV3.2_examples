@@ -300,14 +300,15 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
         struct Object* Detect = &ValidDetections[i];
         // May cause "SEGMENTATION FAULT" contributed by memory out of bound (> 640 or < 0) in BilinearInterpolation
         handle_proto_test(Detect, Mask_Input, Mask);
-        rescalebox(&Detect->Rect, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
+        rescalebox(&Detect->Rect, mask_size_w, mask_size_h, Img->width, Img->height);
         RescaleMaskandDrawMask(Detect, Mask, Img, mask_xyxy);
     }
     printf("Drew %d Masks...\n", NumDetections);
 
     int Thickness = (int) fmaxf(roundf((Img->width + Img->height) / 2.f * 0.003f), 2);
     for(int i = 0 ; i < NumDetections  ; ++i){
-        DrawLabel(&ValidDetections[i].Rect, ValidDetections[i].label, "Label", Thickness, TextColor, Img);
+        char* Label = GetClassName(ValidDetections[i].label);
+        DrawLabel(ValidDetections[i].Rect, ValidDetections[i].label, Label, Thickness, TextColor, Img);
     }
 
     printf("Drew %d Lables...\n", NumDetections);
@@ -324,8 +325,8 @@ int main(int argc, const char **argv)
     }
     int CVMUL = 0;
     CvScalar TextColor = CV_RGB(255, 255, 255);
-    //IplImage *Img32 = cvCreateImage(cvGetSize(Img), IPL_DEPTH_32F, 3);
-    //cvConvertScale(Img, Img32, 1/255.f, 0);
+    IplImage *Img32 = cvCreateImage(cvGetSize(Img), IPL_DEPTH_32F, 3);
+    cvConvertScale(Img, Img32, 1/255.f, 0);
 
     float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
     float Mask_Coeffs[MAX_DETECTIONS][32];
@@ -348,17 +349,19 @@ int main(int argc, const char **argv)
     // Display Output
     // ========================
     
-    cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
-    cvShowImage("Final Output", Img);
+    //cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
+    //cvShowImage("Final Output", Img32);
 
-    //cvNamedWindow("Final Output32", CV_WINDOW_AUTOSIZE);
-    //cvShowImage("Final Output32", Img32);
-    // Wait for a key event and close the window
-    cvWaitKey(0);
-    cvDestroyAllWindows();
-    
+    // cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
+    // cvShowImage("Final Output", Img);
+    // // Wait for a key event and close the window
+    // cvWaitKey(0);
+    // cvDestroyAllWindows();
+
+    cvSaveImage("Result.jpg", Img, 0);
     cvReleaseImage(&Img);
-    //cvReleaseImage(&Img32);
+    //cvSaveImage("Result_IMG32.jpg", Img32, 0);
+    cvReleaseImage(&Img32);
     printf("Original Image Released.");
     return 0;
 }

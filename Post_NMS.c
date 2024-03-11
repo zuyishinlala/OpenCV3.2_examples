@@ -39,11 +39,12 @@ static float GetPixel(int x, int y, int width, int height, float *Src){
 static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struct Bbox Bound){
 
     float src_width = MASK_SIZE_WIDTH, src_height = MASK_SIZE_HEIGHT;
-    float tar_width = TRAINED_SIZE_WIDTH, tar_height = TRAINED_SIZE_WIDTH;
+    float tar_width = TRAINED_SIZE_WIDTH, tar_height = TRAINED_SIZE_HEIGHT;
 
     float r_ratio = src_height / tar_height;
     float c_ratio = src_width / tar_width;
     // Perform Binary Threshold only in the Bounding Box Region
+    clamp(&Bound, tar_width, tar_height);
     for(int r = (int)Bound.top ; r <  (int)Bound.bottom ; ++r){
         for(int c =  (int)Bound.left ; c <  (int)Bound.right ; ++c){
             float PixelSum = 0.f;
@@ -105,6 +106,13 @@ static void rescalebox(struct Bbox *Box, float src_size_w, float src_size_h, flo
     clamp(Box, tar_size_w, tar_size_h);
 }
 
+static char* GetClassName(int ClassIndex){
+    char* names[] = {
+        "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
+        "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
+        "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee"};
+    return names[ClassIndex];
+}
 
 static CvScalar Generate_Color(int ClassIndex){
     const unsigned int hex_colors[20] = {0xFF3838, 0xFF9D97, 0xFF701F, 0xFFB21D, 0xCFD231, 0x48F90A, 0x92CC17, 0x3DDB86, 0x1A9334, 0x00D4BB,
@@ -119,23 +127,35 @@ static void DrawMask(const int ClassLabel, float mask_transparency, IplImage* ma
     IplImage* MaskedImg = cvCloneImage(ImgSrc);
     cvSet(MaskedImg, COLOR, mask); //Specify the color
 
+    // cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
+    // cvShowImage("Final Output", MaskedImg);
+    // cvWaitKey(0);
+    // cvDestroyAllWindows();
     // Draw Mask
-    cvAddWeighted(ImgSrc, 1.f - mask_transparency, MaskedImg, mask_transparency, 0, ImgSrc);
+    COLOR.val[0] *= mask_transparency;
+    COLOR.val[1] *= mask_transparency;
+    COLOR.val[2] *= mask_transparency;
+    //cvAddWeighted(ImgSrc, 1.f - mask_transparency, MaskedImg, mask_transparency, 0, ImgSrc);
+    cvAddS(ImgSrc, COLOR, ImgSrc, mask);
+    //cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
+    //cvShowImage("Final Output", ImgSrc);
+    //cvWaitKey(0);
+    //cvDestroyAllWindows();
     cvReleaseImage(&MaskedImg);
 }
 
-static void DrawLabel(const struct Bbox* box, const int ClassLabel, const char* label, int boxthickness, CvScalar TextColor, IplImage* ImgSrc){
+static void DrawLabel(const struct Bbox box, const int ClassLabel, const char* label, int boxthickness, CvScalar TextColor, IplImage* ImgSrc){
     CvScalar COLOR = Generate_Color(ClassLabel);
-    int left = (int)box->left, top = (int)box->top;
+    int left = (int)box.left, top = (int)box.top;
     // Draw Bounding Box
     CvPoint tlp = cvPoint(left , top);
-    CvPoint brp = cvPoint((int)box->right, (int)box->bottom);
+    CvPoint brp = cvPoint((int)box.right, (int)box.bottom);
     cvRectangle(ImgSrc, tlp, brp, COLOR, boxthickness, CV_AA, 0);
 
     int baseLine;
     CvSize label_size; 
     CvFont font; // font for text
-    cvInitFont(&font, CV_FONT_HERSHEY_COMPLEX, 0.5, 0.5, 0, boxthickness / 3, CV_AA);
+    cvInitFont(&font, CV_FONT_HERSHEY_COMPLEX, 1.f, 1.f, 0, boxthickness / 2, CV_AA);
 
     cvGetTextSize(label, &font, &label_size, &baseLine);
 
@@ -153,7 +173,7 @@ static void RescaleMaskandDrawMask(struct Object* obj, uint8_t* UnCropedMask, Ip
 
     // uint8_t array to IplImage
     IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
-    cvSetData(SrcMask, UnCropedMask, TRAINED_SIZE_WIDTH);
+    cvSetData(SrcMask, UnCropedMask, SrcMask->widthStep);
 
     // ROI Mask Region by using maskxyxy
     CvRect roiRect = cvRect(mask_xyxy[0], mask_xyxy[1], mask_xyxy[2] - mask_xyxy[0], mask_xyxy[3] - mask_xyxy[1]); // (left, top, width, height)
@@ -175,24 +195,52 @@ static void RescaleMaskandDrawMask(struct Object* obj, uint8_t* UnCropedMask, Ip
     cvReleaseImage(&FinalMask);
 }
 
-/*
+static void DrawLabel_CVMUL(const struct Bbox box, const int ClassLabel, const char* label, int boxthickness, CvScalar TextColor, IplImage* ImgSrc){
+    CvScalar COLOR = Generate_Color(ClassLabel);
+    COLOR.val[0] /= 255.f;
+    COLOR.val[1] /= 255.f;
+    COLOR.val[2] /= 255.f;
 
-static void DrawMask_CVMUL(const int ClassIndex, float mask_transparency, IplImage** mask, IplImage** ImgSrc){
+    int left = (int)box.left, top = (int)box.top;
+    // Draw Bounding Box
+    CvPoint tlp = cvPoint(left , top);
+    CvPoint brp = cvPoint((int)box.right, (int)box.bottom);
+    cvRectangle(ImgSrc, tlp, brp, COLOR, boxthickness, CV_AA, 0);
+
+    int baseLine;
+    CvSize label_size; 
+    CvFont font; // font for text
+    cvInitFont(&font, CV_FONT_HERSHEY_COMPLEX, 1.f, 1.f, 0, boxthickness / 2, CV_AA);
+
+    cvGetTextSize(label, &font, &label_size, &baseLine);
+
+    brp.x = left + label_size.width;
+    brp.y = top;
+    tlp.y -= (label_size.height+baseLine);
+
+    // Draw Background
+    cvRectangle(ImgSrc, tlp, brp, COLOR, CV_FILLED, CV_AA, 0);
+    // Draw Label
+    cvPutText(ImgSrc, label, cvPoint(left, top - baseLine), &font, TextColor);
+}
+
+
+static void DrawMask_CVMUL(const int ClassIndex, float mask_transparency, IplImage* mask, IplImage* ImgSrc){
     CvScalar COLOR = Generate_Color(ClassIndex);
     COLOR.val[0] /= 255.f;
     COLOR.val[1] /= 255.f;
     COLOR.val[2] /= 255.f;
-    IplImage* CLR = cvCreateImage(cvGetSize(*mask), IPL_DEPTH_32F, 3);
+    IplImage* CLR = cvCreateImage(cvGetSize(mask), IPL_DEPTH_32F, 3);
     cvSet(CLR, COLOR, NULL);
 
-    cvMul(*mask, CLR, *mask, 1);
+    cvMul(mask, CLR, mask, 1);
 
-    cvAddWeighted(*ImgSrc, 1, *mask, mask_transparency, 0, *ImgSrc);
+    cvAddWeighted(ImgSrc, 1, mask, mask_transparency, 0, ImgSrc);
     cvReleaseImage(&CLR);
 }
 
 //Obtain final mask (size : ORG_SIZE_HEIGHT, ORG_SIZE_WIDTH) and draw label
-static void RescaleMaskandDrawMask_CVMUL(struct Object* obj, uint8_t* UnCropedMask, IplImage** ImgSrc, int* mask_xyxy){
+static void RescaleMaskandDrawMask_CVMUL(struct Object* obj, uint8_t* UnCropedMask, IplImage* ImgSrc, int* mask_xyxy){
 
     // uint8_t array to IplImage
     IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
@@ -207,17 +255,17 @@ static void RescaleMaskandDrawMask_CVMUL(struct Object* obj, uint8_t* UnCropedMa
     cvCopy(SrcMask, roiImg, NULL);
 
     // Obtain Resized Mask
-    IplImage* FinalMask = cvCreateImage(cvGetSize(*ImgSrc), roiImg->depth, 1);
+    IplImage* FinalMask = cvCreateImage(cvGetSize(ImgSrc), roiImg->depth, 1);
     cvResize(roiImg, FinalMask, CV_INTER_LINEAR);
 
-    IplImage* FinalMask32_1 = cvCreateImage(cvGetSize(*ImgSrc), IPL_DEPTH_32F, 1);
+    IplImage* FinalMask32_1 = cvCreateImage(cvGetSize(ImgSrc), IPL_DEPTH_32F, 1);
     cvConvertScale(FinalMask, FinalMask32_1, 1/255.f, 0);
 
-    IplImage* FinalMask32_3 = cvCreateImage(cvGetSize(*ImgSrc), IPL_DEPTH_32F, 3);
+    IplImage* FinalMask32_3 = cvCreateImage(cvGetSize(ImgSrc), IPL_DEPTH_32F, 3);
     cvMerge(FinalMask32_1, FinalMask32_1, FinalMask32_1, NULL, FinalMask32_3);
 
     // Draw Label and Task (int label to string)
-    DrawMask_CVMUL(obj->label, MASK_TRANSPARENCY, &FinalMask32_3, ImgSrc);
+    DrawMask_CVMUL(obj->label, MASK_TRANSPARENCY, FinalMask32_3, ImgSrc);
 
     cvReleaseImage(&SrcMask);
     cvReleaseImage(&roiImg);
@@ -225,4 +273,3 @@ static void RescaleMaskandDrawMask_CVMUL(struct Object* obj, uint8_t* UnCropedMa
     cvReleaseImage(&FinalMask32_1);
     cvReleaseImage(&FinalMask32_3);
 }
-*/
