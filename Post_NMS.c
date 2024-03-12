@@ -46,7 +46,7 @@ static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struc
 
     clamp(&Bound, tar_width, tar_height);
     //printf("%f, %f, %f, %f\n", Bound.left, Bound.right, Bound.top, Bound.bottom);
-    int CountPixel = 0;
+
     // Perform Binary Threshold only in the Bounding Box Region
     for(int r = Bound.top ; r < Bound.bottom ; ++r){
         for(int c = Bound.left ; c < Bound.right ; ++c){
@@ -63,11 +63,9 @@ static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struc
                      (1 - dc) *  dr * GetPixel(ic    , ir + 1, src_height, src_width, Src) +
                       dc * (1 - dr) * GetPixel(ic + 1, ir    , src_height, src_width, Src) +
                 (1 - dc) * (1 - dr) * GetPixel(ic    , ir    , src_height, src_width, Src);
-            if(PixelSum > Threshold) ++CountPixel;
             *(Tar + r * TRAINED_SIZE_WIDTH + c) = (PixelSum > Threshold) ? 255 : 0;
         }
     }
-    printf("Pixel that is white is :%d\n", CountPixel);
 }
 
 // Obtain Uncropped Mask
@@ -129,24 +127,13 @@ static CvScalar Generate_Color(int ClassIndex){
 // Plot Label and Bounding Box
 static void DrawMask(const int ClassLabel, float mask_transparency, IplImage* mask, IplImage* ImgSrc){
     CvScalar COLOR = Generate_Color(ClassLabel);
-    // IplImage* MaskedImg = cvCloneImage(ImgSrc);
-    // cvSet(MaskedImg, COLOR, mask); //Specify the color
 
-    cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
-    cvShowImage("Final Output", mask);
-    cvWaitKey(0);
-    cvDestroyAllWindows();
     // Draw Mask
     COLOR.val[0] *= mask_transparency;
     COLOR.val[1] *= mask_transparency;
     COLOR.val[2] *= mask_transparency;
-    //cvAddWeighted(ImgSrc, 1.f - mask_transparency, MaskedImg, mask_transparency, 0, ImgSrc);
-    // cvNamedWindow("Mask", CV_WINDOW_AUTOSIZE);
-    // cvShowImage("Mask", mask);
-    // cvWaitKey(0);
-    // cvDestroyAllWindows();
+
     cvAddS(ImgSrc, COLOR, ImgSrc, mask);
-    //cvReleaseImage(&MaskedImg);
 }
 
 static void DrawLabel(const struct Bbox box, const int ClassLabel, const char* label, int boxthickness, CvScalar TextColor, IplImage* ImgSrc){

@@ -275,7 +275,7 @@ static inline void PrintObjectData(int NumDetections, struct Object* ValidDetect
 }
 
 // Read Inputs + Pre-process of Inputs + NMS
-static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct Object *ValidDetections, float (*MaskCoeffs)[32], const char** argv){
+static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct Object *ValidDetections, float (*MaskCoeffs)[NUM_MASKS], const char** argv){
     char* Bboxtype = "xyxy";
     char* classes = NULL;
 
@@ -284,18 +284,16 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
     // Init Inputs(9 prediction input + 1 mask input) in Sources/Input.c
     // ========================
     // initPredInput(&input, Mask_Input, argv);
-    // printf("=======Readed Input Complete=======\n");
-    // print_data(&input.cls_pred[0][0], NUM_CLASSES, 4);
+    // printf("======Init Input Complete======\n");
     // sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
     // post_regpreds(input.reg_pred, Bboxtype);
-    // printf("=======After preprocessing Regs=======\n");
-    // print_data(&input.cls_pred[0][0], NUM_CLASSES, 4);
 
     initPredInput_pesudo(&input, Mask_Input, argv);
 
     non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
     printf("NMS Done,Got %d Detections...\n", *NumDetections);
 
+    CopyMaskCoeffs(MaskCoeffs, *NumDetections, ValidDetections);
     //PrintObjectData(*NumDetections, ValidDetections);
 }
 
@@ -310,7 +308,7 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
     int mask_size_w = TRAINED_SIZE_WIDTH;
     int mask_size_h = TRAINED_SIZE_HEIGHT;
 
-    for(int i = 1 ; i < 2 ; ++i){
+    for(int i = 0 ; i < NumDetections ; ++i){
         memset(Mask, 0, mask_size_w * mask_size_h * sizeof(uint8_t));
         struct Object* Detect = &ValidDetections[i];
         // May cause "SEGMENTATION FAULT" contributed by memory out of bound (> 640 or < 0) in BilinearInterpolation
@@ -322,7 +320,7 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
 
     int Thickness = (int) fmaxf(roundf((Img->width + Img->height) / 2.f * 0.003f), 2);
 
-    for(int i = 1  ; i > 0  ; --i){
+    for(int i = NumDetections - 1  ; i > -1 ; --i){
         //String Append Label + Confidence
         char* Label = GetClassName(ValidDetections[i].label);
         char FinalLabel[20];
@@ -341,7 +339,7 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
 
 int main(int argc, const char **argv)
 {
-    IplImage* Img = cvLoadImage( argv[5], CV_LOAD_IMAGE_COLOR);
+    IplImage* Img = cvLoadImage( argv[1], CV_LOAD_IMAGE_COLOR);
     if(!Img){
         printf("---No Img---\n");
         return 0;
@@ -349,7 +347,7 @@ int main(int argc, const char **argv)
     CvScalar TextColor = CV_RGB(255, 255, 255);
 
     float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
-    float Mask_Coeffs[MAX_DETECTIONS][32];
+    float Mask_Coeffs[MAX_DETECTIONS][NUM_MASKS];
 
     static uint8_t Mask[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH] = {0};
 

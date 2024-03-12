@@ -48,10 +48,10 @@ void initPredInput_pesudo(struct Pred_Input* input, float* mask_ptr, const char*
     float* reg_ptr = &input->reg_pred[0][0];
     float* seg_ptr = &input->seg_pred[0][0];
 
-    ReadMaskInput(reg_ptr, ROWSIZE, 4, argv[1]);
-    ReadMaskInput(cls_ptr, ROWSIZE, NUM_CLASSES, argv[2]);
-    ReadMaskInput(seg_ptr, ROWSIZE, NUM_MASKS, argv[3]);
-    ReadMaskInput(mask_ptr, NUM_MASKS, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, argv[4]);
+    ReadMaskInput(reg_ptr, ROWSIZE, 4, argv[2]);
+    ReadMaskInput(cls_ptr, ROWSIZE, NUM_CLASSES, argv[3]);
+    ReadMaskInput(seg_ptr, ROWSIZE, NUM_MASKS, argv[4]);
+    ReadMaskInput(mask_ptr, NUM_MASKS, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, argv[5]);
 }
 
 void initPredInput(struct Pred_Input* input, float* mask_ptr, const char** argv){
@@ -93,3 +93,4 @@ void initPredInput(struct Pred_Input* input, float* mask_ptr, const char** argv)
 
 //  gcc main.c -o T ./Sources/Input.c ./Sources/Bbox.c  `pkg-config --cflags --libs opencv` -lm
 // ./T ./Images/img.jpg ./outputs/cls_preds8.txt ./outputs/cls_preds16.txt ./outputs/cls_preds32.txt ./outputs/reg_preds8.txt ./outputs/reg_preds16.txt ./outputs/reg_preds32.txt ./outputs/seg_preds8.txt ./outputs/seg_preds16.txt ./outputs/seg_preds32.txt ./outputs/mask_input.txt
+// ./T ./Images/img.jpg  ./Outputs/regs_preds.txt ./Outputs/cls_preds.txt ./Outputs/seg_preds.txt ./Outputs/masks.txt 
