@@ -310,7 +310,7 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
     int mask_size_w = TRAINED_SIZE_WIDTH;
     int mask_size_h = TRAINED_SIZE_HEIGHT;
 
-    for(int i = 0 ; i < NumDetections ; ++i){
+    for(int i = 1 ; i < 2 ; ++i){
         memset(Mask, 0, mask_size_w * mask_size_h * sizeof(uint8_t));
         struct Object* Detect = &ValidDetections[i];
         // May cause "SEGMENTATION FAULT" contributed by memory out of bound (> 640 or < 0) in BilinearInterpolation
@@ -322,7 +322,7 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
 
     int Thickness = (int) fmaxf(roundf((Img->width + Img->height) / 2.f * 0.003f), 2);
 
-    for(int i = NumDetections - 1 ; i > -1  ; --i){
+    for(int i = 1  ; i > 0  ; --i){
         //String Append Label + Confidence
         char* Label = GetClassName(ValidDetections[i].label);
         char FinalLabel[20];

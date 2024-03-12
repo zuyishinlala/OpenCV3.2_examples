@@ -45,10 +45,11 @@ static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struc
     float c_ratio = src_width / tar_width;
 
     clamp(&Bound, tar_width, tar_height);
-    printf("%f, %f, %f, %f\n", Bound.left, Bound.right, Bound.top, Bound.bottom);
+    //printf("%f, %f, %f, %f\n", Bound.left, Bound.right, Bound.top, Bound.bottom);
+    int CountPixel = 0;
     // Perform Binary Threshold only in the Bounding Box Region
-    for(int r = (int)Bound.top ; r <  (int)Bound.bottom ; ++r){
-        for(int c =  (int)Bound.left ; c <  (int)Bound.right ; ++c){
+    for(int r = Bound.top ; r < Bound.bottom ; ++r){
+        for(int c = Bound.left ; c < Bound.right ; ++c){
             float PixelSum = 0.f;
             
             float dr = (r + 0.5) * r_ratio - 0.5;
@@ -62,9 +63,11 @@ static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struc
                      (1 - dc) *  dr * GetPixel(ic    , ir + 1, src_height, src_width, Src) +
                       dc * (1 - dr) * GetPixel(ic + 1, ir    , src_height, src_width, Src) +
                 (1 - dc) * (1 - dr) * GetPixel(ic    , ir    , src_height, src_width, Src);
+            if(PixelSum > Threshold) ++CountPixel;
             *(Tar + r * TRAINED_SIZE_WIDTH + c) = (PixelSum > Threshold) ? 255 : 0;
         }
     }
+    printf("Pixel that is white is :%d\n", CountPixel);
 }
 
 // Obtain Uncropped Mask
@@ -129,10 +132,10 @@ static void DrawMask(const int ClassLabel, float mask_transparency, IplImage* ma
     // IplImage* MaskedImg = cvCloneImage(ImgSrc);
     // cvSet(MaskedImg, COLOR, mask); //Specify the color
 
-    // cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
-    // cvShowImage("Final Output", MaskedImg);
-    // cvWaitKey(0);
-    // cvDestroyAllWindows();
+    cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
+    cvShowImage("Final Output", mask);
+    cvWaitKey(0);
+    cvDestroyAllWindows();
     // Draw Mask
     COLOR.val[0] *= mask_transparency;
     COLOR.val[1] *= mask_transparency;
