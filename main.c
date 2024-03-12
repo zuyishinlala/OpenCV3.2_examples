@@ -256,7 +256,7 @@ static void CopyMaskCoeffs(float (*DstCoeffs)[32], const int NumDetections, stru
 
 static void print_data(float *data,int colsize, int size){
     for(int i = 0 ; i < size ; ++i){
-        for(int c = 0 ;c < 4 ; ++c){
+        for(int c = 0 ; c < 4 ; ++c){
             printf("%f, ", *(data + i*colsize + c));
         }
         printf("\n");
@@ -270,6 +270,7 @@ static inline void PrintObjectData(int NumDetections, struct Object* ValidDetect
         printf("Box Position: %f, %f, %f, %f\n",ValidDetections[i].Rect.left, ValidDetections[i].Rect.top, ValidDetections[i].Rect.right, ValidDetections[i].Rect.bottom);
         printf("Confidence: %f \n",ValidDetections[i].conf);
         printf("Label: %d \n",ValidDetections[i].label);
+        printf("Mask Coeffs: %f, %f, %f, %f \n", ValidDetections[i].maskcoeff[0], ValidDetections[i].maskcoeff[1], ValidDetections[i].maskcoeff[2], ValidDetections[i].maskcoeff[3]);
     }
     printf("======================\n");
 }
@@ -283,18 +284,18 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
     // ========================
     // Init Inputs(9 prediction input + 1 mask input) in Sources/Input.c
     // ========================
-    // initPredInput(&input, Mask_Input, argv);
-    // printf("======Init Input Complete======\n");
-    // sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
-    // post_regpreds(input.reg_pred, Bboxtype);
-
-    initPredInput_pesudo(&input, Mask_Input, argv);
+    initPredInput(&input, Mask_Input, argv);
+    printf("======Init Input Complete======\n");
+    sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
+    post_regpreds(input.reg_pred, Bboxtype);
+    print_data(Mask_Input, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, 4);
+    //initPredInput_pesudo(&input, Mask_Input, argv);
 
     non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
     printf("NMS Done,Got %d Detections...\n", *NumDetections);
 
     CopyMaskCoeffs(MaskCoeffs, *NumDetections, ValidDetections);
-    //PrintObjectData(*NumDetections, ValidDetections);
+    PrintObjectData(*NumDetections, ValidDetections);
 }
 
 
@@ -434,4 +435,90 @@ tensor([[1.48400e+03, 2.21000e+02, 1.67100e+03, 6.54000e+02, 9.43630e-01, 0.0000
         [7.89000e+02, 7.31000e+02, 1.12700e+03, 1.09900e+03, 9.13981e-01, 1.60000e+01],
         [1.44700e+03, 6.56000e+02, 1.75400e+03, 9.22000e+02, 9.13909e-01, 1.60000e+01],
         [1.11000e+02, 4.54000e+02, 2.65000e+02, 9.84000e+02, 9.00443e-01, 0.00000e+00]])
+*/
+
+/* 
+384 * 640
+======Index: 0======
+Box Position: 496.742889, 72.740685, 558.141663, 212.283295
+Confidence: 0.911777 
+Label: 0 
+Mask Coeffs: 0.000000, 0.036110, -0.072220, 0.409245 
+======Index: 1======
+Box Position: 37.394318, 148.274445, 88.559937, 321.307251
+Confidence: 0.911777 
+Label: 0 
+Mask Coeffs: 0.048146, -0.012037, -0.048146, 0.457392 
+======Index: 2======
+Box Position: 484.089264, 214.694946, 586.420532, 300.281067
+Confidence: 0.911777 
+Label: 16 
+Mask Coeffs: -0.060183, -0.144439, 0.288879, 0.132403 
+======Index: 3======
+Box Position: 264.952698, 241.524338, 376.237488, 356.713837
+Confidence: 0.893720 
+Label: 16 
+Mask Coeffs: -0.043946, -0.131839, 0.219732, 0.076906 
+======Index: 4======
+Box Position: 159.812622, 293.394318, 212.838806, 340.838806
+Confidence: 0.884338 
+Label: 16 
+Mask Coeffs: -0.144439, 0.373135, 0.072220, -0.252769 
+======Index: 5======
+Box Position: 214.509766, 174.137222, 266.605682, 251.350800
+Confidence: 0.876406 
+Label: 0 
+Mask Coeffs: -0.096293, 0.300916, -0.036110, 0.000000 
+======Index: 6======
+Box Position: 101.579491, 233.485794, 173.211365, 309.769104
+Confidence: 0.859139 
+Label: 16 
+Mask Coeffs: -0.132403, 0.132403, 0.300916, -0.060183 
+======Index: 7======
+Box Position: 350.157379, 163.465744, 372.843903, 211.530426
+Confidence: 0.769491 
+Label: 0 
+Mask Coeffs: -0.427589, 0.277933, -0.545176, -0.096208 
+======Index: 8======
+Box Position: 337.233521, 189.623123, 361.842621, 243.071045
+Confidence: 0.769491 
+Label: 0 
+Mask Coeffs: -0.160346, 0.491728, -0.277933, -0.256554 
+======Index: 9======
+Box Position: 261.463196, 170.002548, 278.381958, 198.456833
+Confidence: 0.471330 
+Label: 0 
+Mask Coeffs: -0.085518, 0.224484, -0.801730, -0.459658 
+======Index: 10======
+Box Position: 498.237335, 71.470840, 557.453003, 127.994904
+Confidence: 0.251498 
+Label: 0 
+Mask Coeffs: -0.085518, 0.352761, 0.299312, -0.577246 
+======================
+
+loutputs:
+tensor([[1.49900e+03, 2.23000e+02, 1.68800e+03, 6.51000e+02, 9.11777e-01, 0.00000e+00],
+        [9.00000e+01, 4.55000e+02, 2.47000e+02, 9.86000e+02, 9.11777e-01, 0.00000e+00],
+        [1.46300e+03, 6.56000e+02, 1.77400e+03, 9.24000e+02, 9.11777e-01, 1.60000e+01],
+        [7.88000e+02, 7.41000e+02, 1.13000e+03, 1.09400e+03, 8.93720e-01, 1.60000e+01],
+        [4.66000e+02, 9.00000e+02, 6.28000e+02, 1.04600e+03, 8.84338e-01, 1.60000e+01],
+        [6.33000e+02, 5.34000e+02, 7.93000e+02, 7.71000e+02, 8.76406e-01, 0.00000e+00],
+        [2.87000e+02, 7.16000e+02, 5.07000e+02, 9.50000e+02, 8.59139e-01, 1.60000e+01],
+        [1.05000e+03, 5.01000e+02, 1.11900e+03, 6.49000e+02, 7.69491e-01, 0.00000e+00],
+        [1.01000e+03, 5.82000e+02, 1.08500e+03, 7.46000e+02, 7.69491e-01, 0.00000e+00],
+        [7.77000e+02, 5.22000e+02, 8.29000e+02, 6.09000e+02, 4.71330e-01, 0.00000e+00],
+        [1.50400e+03, 2.19000e+02, 1.68500e+03, 3.93000e+02, 2.51498e-01, 0.00000e+00]])
+        
+tensor([[ 0.00000,  0.03611, -0.07222,  0.40925],
+        [ 0.04815, -0.01204, -0.04815,  0.45739],
+        [-0.08426, -0.09629,  0.32499,  0.16851],
+        [-0.04395, -0.13184,  0.21973,  0.07691],
+        [-0.14444,  0.37314,  0.07222, -0.25277],
+        [-0.09629,  0.30092, -0.03611,  0.00000],
+        [-0.13240,  0.13240,  0.30092, -0.06018],
+        [-0.42759,  0.27793, -0.54518, -0.09621],
+        [-0.16035,  0.49173, -0.27793, -0.25655],
+        [-0.08552,  0.22448, -0.80173, -0.45966],
+        [-0.08552,  0.35276,  0.29931, -0.57725]])
+
 */

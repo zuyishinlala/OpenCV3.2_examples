@@ -48,12 +48,12 @@ static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struc
     //printf("%f, %f, %f, %f\n", Bound.left, Bound.right, Bound.top, Bound.bottom);
 
     // Perform Binary Threshold only in the Bounding Box Region
-    for(int r = Bound.top ; r < Bound.bottom ; ++r){
-        for(int c = Bound.left ; c < Bound.right ; ++c){
+    for(int r = (int)Bound.top ; r < (int)Bound.bottom ; ++r){
+        for(int c = (int)Bound.left ; c < (int)Bound.right ; ++c){
             float PixelSum = 0.f;
             
-            float dr = (r + 0.5) * r_ratio - 0.5;
-            float dc = (c + 0.5) * c_ratio - 0.5;
+            float dr = (r + 0.5f) * r_ratio - 0.5f;
+            float dc = (c + 0.5f) * c_ratio - 0.5f;
             float ir = floorf(dr), ic = floorf(dc);
 
             dr = (dr < 0.f) ? 1.0f : ((dr > src_height - 1.0f) ? 0.f : dr - ir);
@@ -133,6 +133,10 @@ static void DrawMask(const int ClassLabel, float mask_transparency, IplImage* ma
     COLOR.val[1] *= mask_transparency;
     COLOR.val[2] *= mask_transparency;
 
+    // cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
+    // cvShowImage("Final Output", mask);
+    // cvWaitKey(0);
+    // cvDestroyAllWindows();  
     cvAddS(ImgSrc, COLOR, ImgSrc, mask);
 }
 
