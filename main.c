@@ -301,7 +301,7 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
 
 
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
-static inline void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage* Img, uint8_t* Mask, CvScalar TextColor){
+static inline void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage* Img, uint8_t* Mask, CvScalar TextColor, float* pred_mask){
     printf("Drawing Labels and Segments...\n");
 
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
@@ -311,9 +311,10 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
 
     for(int i = 0 ; i < NumDetections ; ++i){
         memset(Mask, 0, mask_size_w * mask_size_h * sizeof(uint8_t));
+        memset(pred_mask, 0, mask_size_w * mask_size_h * sizeof(float) / 16);
         struct Object* Detect = &ValidDetections[i];
         // May cause "SEGMENTATION FAULT" contributed by memory out of bound (> 640 or < 0) in BilinearInterpolation
-        handle_proto_test(Detect, Mask_Input, Mask);
+        handle_proto_test(Detect, Mask_Input, Mask, pred_mask);
         rescalebox(&Detect->Rect, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
         RescaleMaskandDrawMask(Detect, Mask, Img, mask_xyxy);
     }
@@ -351,6 +352,7 @@ int main(int argc, const char **argv)
     float Mask_Coeffs[MAX_DETECTIONS][NUM_MASKS];
 
     static uint8_t Mask[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH] = {0};
+    static float pred_Mask[MASK_SIZE_WIDTH * MASK_SIZE_HEIGHT] = {0};
 
     // Recorded Detections for NMS
     struct Object ValidDetections[MAX_DETECTIONS]; 
@@ -361,7 +363,7 @@ int main(int argc, const char **argv)
     //PrintObjectData(NumDetections, ValidDetections);
 
     // Store Masks Results
-    PostProcessing(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor);
+    PostProcessing(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor, pred_Mask);
     
     // ========================
     // Display Output

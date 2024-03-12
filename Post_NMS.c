@@ -70,7 +70,7 @@ static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struc
 }
 
 // Obtain Uncropped Mask
-static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], uint8_t* UncroppedMask)
+static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], uint8_t* UncroppedMask, float* pred_mask)
 {
     // Resize mask & Obtain Binary Mask
     // Matrix Multiplication
@@ -78,8 +78,8 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
     struct Bbox box = obj->Rect;
 
     float Binary_Thres = 0.5f;
-    float pred_mask[MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH] = {0};
-
+    int mask_size_w = MASK_SIZE_WIDTH;
+    int mask_size_h = MASK_SIZE_HEIGHT;
     // Obtain Uncropped Mask (size 160*160)
     for(int i = 0 ; i < MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH ; ++i){
         float Pixel = 0.f;
@@ -90,18 +90,18 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
     }
 
     sigmoid(MASK_SIZE_HEIGHT, MASK_SIZE_WIDTH, pred_mask);
-    // IplImage* SrcMask = cvCreateImageHeader(cvSize(MASK_SIZE_WIDTH, MASK_SIZE_HEIGHT), IPL_DEPTH_32F, 1); 
-    // cvSetData(SrcMask, pred_mask, SrcMask->widthStep);
+    IplImage* SrcMask = cvCreateImageHeader(cvSize(MASK_SIZE_WIDTH, MASK_SIZE_HEIGHT), IPL_DEPTH_32F, 1); 
+    cvSetData(SrcMask, pred_mask, SrcMask->widthStep);
+    cvNamedWindow("Pred_Mask", CV_WINDOW_AUTOSIZE);
+    cvShowImage("Pred_Mask", SrcMask);
+    cvWaitKey(0);
+    cvDestroyWindow("Pred_Mask");
 
-    // cvNamedWindow("Output", CV_WINDOW_AUTOSIZE);
-    // cvShowImage("Output", SrcMask);
-    // cvWaitKey(0);
-    // cvDestroyAllWindows();
-
-    // cvReleaseImage(&SrcMask);
+    cvReleaseImage(&SrcMask);
     // Bilinear Interpolate + Binary Threshold 
     // Obtain Uncropped Mask (size 640 * 640)
     BilinearInterpolate(pred_mask, UncroppedMask, Binary_Thres, box);
+    
 }
 
 // Rescale Bbox: Bounding Box positions to Real place
@@ -146,7 +146,7 @@ static void DrawMask(const int ClassLabel, float mask_transparency, IplImage* ma
     // cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
     // cvShowImage("Final Output", mask);
     // cvWaitKey(0);
-    // cvDestroyAllWindows();  
+    // cvDestroyAllWindows();
     cvAddS(ImgSrc, COLOR, ImgSrc, mask);
 }
 
