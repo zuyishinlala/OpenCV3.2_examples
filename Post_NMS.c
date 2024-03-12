@@ -12,6 +12,7 @@
 #include <math.h>
 int cvRound(double value) {return(ceil(value));}
 
+
 static void sigmoid(int rowsize, int colsize, float *ptr)
 {
     for (int i = 0; i < rowsize * colsize ; ++i, ++ptr)
@@ -45,15 +46,15 @@ static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struc
     float c_ratio = src_width / tar_width;
 
     clamp(&Bound, tar_width, tar_height);
-    //printf("%f, %f, %f, %f\n", Bound.left, Bound.right, Bound.top, Bound.bottom);
+    printf("%f, %f, %f, %f\n", Bound.left, Bound.right, Bound.top, Bound.bottom);
 
     // Perform Binary Threshold only in the Bounding Box Region
     for(int r = (int)Bound.top ; r < (int)Bound.bottom ; ++r){
         for(int c = (int)Bound.left ; c < (int)Bound.right ; ++c){
             float PixelSum = 0.f;
             
-            float dr = (r + 0.5f) * r_ratio - 0.5f;
-            float dc = (c + 0.5f) * c_ratio - 0.5f;
+            float dr = ((float)r + 0.5f) * r_ratio - 0.5f;
+            float dc = ((float)c + 0.5f) * c_ratio - 0.5f;
             float ir = floorf(dr), ic = floorf(dc);
 
             dr = (dr < 0.f) ? 1.0f : ((dr > src_height - 1.0f) ? 0.f : dr - ir);
@@ -75,7 +76,7 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
     // Matrix Multiplication
     float* maskcoeffs = obj->maskcoeff;
     struct Bbox box = obj->Rect;
-   
+
     float Binary_Thres = 0.5f;
     float pred_mask[MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH] = {0};
 
@@ -89,6 +90,15 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
     }
 
     sigmoid(MASK_SIZE_HEIGHT, MASK_SIZE_WIDTH, pred_mask);
+    // IplImage* SrcMask = cvCreateImageHeader(cvSize(MASK_SIZE_WIDTH, MASK_SIZE_HEIGHT), IPL_DEPTH_32F, 1); 
+    // cvSetData(SrcMask, pred_mask, SrcMask->widthStep);
+
+    // cvNamedWindow("Output", CV_WINDOW_AUTOSIZE);
+    // cvShowImage("Output", SrcMask);
+    // cvWaitKey(0);
+    // cvDestroyAllWindows();
+
+    // cvReleaseImage(&SrcMask);
     // Bilinear Interpolate + Binary Threshold 
     // Obtain Uncropped Mask (size 640 * 640)
     BilinearInterpolate(pred_mask, UncroppedMask, Binary_Thres, box);
