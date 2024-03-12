@@ -19,24 +19,23 @@ static void post_regpreds(float (*distance)[4], char *type)
 {
     int row = 0;
     float stride = 8.f;
-    float row_bound = HEIGHT0, col_bound = WIDTH0;
+    int row_bound = HEIGHT0, col_bound = WIDTH0;
     for (int stride_index = 0; stride_index < 3; ++stride_index)
     {
-        for (float anchor_points_r = 0.5f; anchor_points_r < row_bound; ++anchor_points_r)
+        for (int anchor_points_y = 0 ; anchor_points_y < row_bound; ++anchor_points_y)
         {
-            for (float anchor_points_c = 0.5f; anchor_points_c < col_bound; ++anchor_points_c)
+            for (int anchor_points_x = 0 ; anchor_points_x < col_bound; ++anchor_points_x)
             {
                 float *data = &distance[row][0]; // left, top, right, bottom
 
                 // lt, rb = torch.split(distance, 2, -1)
-
                 // x1y1 = anchor_points - lt
-                data[0] = anchor_points_c - data[0];
-                data[1] = anchor_points_r - data[1];
+                data[0] = (float)anchor_points_x - data[0] + 0.5f;
+                data[1] = (float)anchor_points_y - data[1] + 0.5f;
 
                 // x2y2 = anchor_points + rb
-                data[2] += anchor_points_c; // anchor_points_c + data[2]
-                data[3] += anchor_points_r; // anchor_points_r + data[3]
+                data[2] += (float)anchor_points_x + 0.5f; // anchor_points_c + data[2]
+                data[3] += (float)anchor_points_y + 0.5f; // anchor_points_r + data[3]
                 
                 ++row;
             }
@@ -272,17 +271,16 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
     // ========================
     // Init Inputs(9 prediction input + 1 mask input) in Sources/Input.c
     // ========================
-    initPredInput(&input, Mask_Input, argv);
+    // initPredInput(&input, Mask_Input, argv);
+    // sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
+    // post_regpreds(input.reg_pred, Bboxtype);
 
-    sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
-    
-    post_regpreds(input.reg_pred, Bboxtype);
+    initPredInput_pesudo(&input, Mask_Input, argv);
 
     non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
     printf("NMS Done,Got %d Detections...\n", *NumDetections);
 
-    CopyMaskCoeffs(MaskCoeffs, *NumDetections, ValidDetections);
-    //PrintObjectData(*NumDetections, ValidDetections);
+    PrintObjectData(*NumDetections, ValidDetections);
 }
 
 
@@ -326,7 +324,7 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
 
 int main(int argc, const char **argv)
 {
-    IplImage* Img = cvLoadImage( argv[1], CV_LOAD_IMAGE_COLOR);
+    IplImage* Img = cvLoadImage( argv[5], CV_LOAD_IMAGE_COLOR);
     if(!Img){
         printf("---No Img---\n");
         return 0;
