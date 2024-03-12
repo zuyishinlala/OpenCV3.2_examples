@@ -20,6 +20,7 @@ static void post_regpreds(float (*distance)[4], char *type)
     int row = 0;
     float stride = 8.f;
     int row_bound = HEIGHT0, col_bound = WIDTH0;
+    int prev_row_index = 0;
     for (int stride_index = 0; stride_index < 3; ++stride_index)
     {
         for (int anchor_points_y = 0 ; anchor_points_y < row_bound; ++anchor_points_y)
@@ -53,13 +54,14 @@ static void post_regpreds(float (*distance)[4], char *type)
                 distance[i][3] = (y2 - y1);     // height
             }
         }
-        for (int i = 0; i < row_bound ; ++i)
+        for (int i = prev_row_index ; i < row ; ++i)
         {
             for (int j = 0; j < 4; ++j)
             {
                 distance[i][j] *= stride;
             }
         }
+        prev_row_index = row;
         row_bound /= 2;
         col_bound /= 2;
         stride *= 2;
@@ -252,6 +254,16 @@ static void CopyMaskCoeffs(float (*DstCoeffs)[32], const int NumDetections, stru
     }
 }
 
+static void print_data(float *data,int colsize, int size){
+    for(int i = 0 ; i < size ; ++i){
+        for(int c = 0 ;c < 4 ; ++c){
+            printf("%f, ", *(data + i*colsize + c));
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
+
 static inline void PrintObjectData(int NumDetections, struct Object* ValidDetections){
     for(int i = 0 ; i < NumDetections ; ++i){
         printf("======Index: %d======\n", i);
@@ -272,16 +284,21 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
     // Init Inputs(9 prediction input + 1 mask input) in Sources/Input.c
     // ========================
     // initPredInput(&input, Mask_Input, argv);
+    // printf("=======Readed Input Complete=======\n");
+    // print_data(&input.cls_pred[0][0], NUM_CLASSES, 4);
     // sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
     // post_regpreds(input.reg_pred, Bboxtype);
+    // printf("=======After preprocessing Regs=======\n");
+    // print_data(&input.cls_pred[0][0], NUM_CLASSES, 4);
 
     initPredInput_pesudo(&input, Mask_Input, argv);
 
     non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
     printf("NMS Done,Got %d Detections...\n", *NumDetections);
 
-    PrintObjectData(*NumDetections, ValidDetections);
+    //PrintObjectData(*NumDetections, ValidDetections);
 }
+
 
 
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
@@ -298,14 +315,14 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
         struct Object* Detect = &ValidDetections[i];
         // May cause "SEGMENTATION FAULT" contributed by memory out of bound (> 640 or < 0) in BilinearInterpolation
         handle_proto_test(Detect, Mask_Input, Mask);
-        rescalebox(&Detect->Rect, mask_size_w, mask_size_h, Img->width, Img->height);
+        rescalebox(&Detect->Rect, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
         RescaleMaskandDrawMask(Detect, Mask, Img, mask_xyxy);
     }
     printf("Drew %d Masks...\n", NumDetections);
 
     int Thickness = (int) fmaxf(roundf((Img->width + Img->height) / 2.f * 0.003f), 2);
-    for(int i = NumDetections - 1 ; i > -1  ; --i){
 
+    for(int i = NumDetections - 1 ; i > -1  ; --i){
         //String Append Label + Confidence
         char* Label = GetClassName(ValidDetections[i].label);
         char FinalLabel[20];
@@ -350,12 +367,10 @@ int main(int argc, const char **argv)
     // ========================
     // Display Output
     // ========================
-
     cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
     cvShowImage("Final Output", Img);
     cvWaitKey(0);
     cvDestroyAllWindows();
-
     cvSaveImage("Result.jpg", Img, 0);
     cvReleaseImage(&Img);
     printf("Original Image Released.");

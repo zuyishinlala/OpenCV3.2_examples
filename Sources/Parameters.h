@@ -22,7 +22,7 @@
 
 #define MAX_DETECTIONS 20
 #define CONF_THRESHOLD 0.25f
-#define NMS_THRESHOLD 0.45f
+#define NMS_THRESHOLD 0.3f
 
 // Bool
 #define AGNOSTIC 0
