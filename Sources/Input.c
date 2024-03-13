@@ -2,7 +2,6 @@
 
 void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName, int ImageIndex){
     FILE *file = fopen( FileName, "r");
-    printf("Reading...%s",FileName);
 
     if (file == NULL) {
         printf("Error opening file %s\n", FileName);
@@ -20,7 +19,6 @@ void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName, int Im
         }
     }
     
-    
     for(int c = 0 ; c < ColSize ; ++c){
         for(int r = 0 ; r < RowSize ; ++r){
             if (fscanf( file, "%f", Dst+r*ColSize+c) != 1) {
@@ -31,7 +29,6 @@ void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName, int Im
             }
         }
     }
-    printf("Reading %s complete\n",FileName);
     fclose(file);
 }
 
@@ -119,5 +116,4 @@ void initPredInput(struct Pred_Input* input, float* mask_ptr, const char** argv,
 /*
   gcc main.c -o T ./Sources/Input.c ./Sources/Bbox.c  `pkg-config --cflags --libs opencv` -lm
  ./T ./ImgData.txt ./outputs/cls_preds8.txt ./outputs/cls_preds16.txt ./outputs/cls_preds32.txt ./outputs/reg_preds8.txt ./outputs/reg_preds16.txt ./outputs/reg_preds32.txt ./outputs/seg_preds8.txt ./outputs/seg_preds16.txt ./outputs/seg_preds32.txt ./outputs/mask_input.txt
- ./T ./Images/img.jpg  ./Outputs/regs_preds.txt ./Outputs/cls_preds.txt ./Outputs/seg_preds.txt ./Outputs/masks.txt 
 */

@@ -284,10 +284,8 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
     // Init Inputs(9 prediction input + 1 mask input) in Sources/Input.c
     // ========================
     initPredInput(&input, Mask_Input, argv, ImageIndex);
-    print_data(&input.reg_pred[0][0], 4, 4);
     sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
     post_regpreds(input.reg_pred, Bboxtype);
-    //initPredInput_pesudo(&input, Mask_Input, argv);
 
     non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
     printf("NMS Done,Got %d Detections...\n", *NumDetections);
@@ -320,7 +318,6 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
     for(int i = NumDetections - 1  ; i > -1 ; --i){
         DrawLabel(ValidDetections[i].Rect, ValidDetections[i].conf, ValidDetections[i].label, Thickness, TextColor, Img);
     }
-    printf("============Post Processing Complete.============\n");
 }
 
 int main(int argc, const char **argv)
@@ -350,7 +347,7 @@ int main(int argc, const char **argv)
             printf("%s not found\n", NameBuffer);
             return 0;
         }
-
+        printf("===============Reading Image: %s ===============\n", NameBuffer);
         float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
         float Mask_Coeffs[MAX_DETECTIONS][NUM_MASKS];
 
@@ -372,197 +369,17 @@ int main(int argc, const char **argv)
         strcat(FinalDirectory, BaseName);
         cvSaveImage(FinalDirectory, Img, 0);
         cvReleaseImage(&Img);
+        printf("===============%s Complete===============\n", NameBuffer);
+        printf("\n\n");
         ++ImageCount;
     }
     // Close the file
     fclose(ImageDataFile);
-    printf("All Image Read and Released\n");
-    /*
-    IplImage* Img = cvLoadImage( argv[1], CV_LOAD_IMAGE_COLOR);
-    if(!Img){
-        printf("---No Img---\n");
-        return 0;
-    }
-    CvScalar TextColor = CV_RGB(255, 255, 255);
 
-    float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
-    float Mask_Coeffs[MAX_DETECTIONS][NUM_MASKS];
-
-    static uint8_t Mask[TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
-
-    // Recorded Detections for NMS
-    struct Object ValidDetections[MAX_DETECTIONS]; 
-    int NumDetections = 0;
-
-    // Preprocessing + NMS 
-    PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, Mask_Coeffs, argv);
-    //PrintObjectData(NumDetections, ValidDetections);
-
-    // Store Masks Results
-    PostProcessing(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor);
-    
-    // ========================
-    // Display Output
-    // ========================
-    cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
-    cvShowImage("Final Output", Img);
-    cvWaitKey(0);
-    cvDestroyAllWindows();
-    cvSaveImage("./Results/Result.jpg", Img, 0);
-    cvReleaseImage(&Img);
-    printf("Original Image Released.");
-    */
     return 0;
 }
-/*
-gcc main.c -o T ./Sources/Input.c ./Sources/Bbox.c  `pkg-config --cflags --libs opencv` -lm
-time ./T ./Images/img.jpg ./outputs/cls_preds8.txt ./outputs/cls_preds16.txt ./outputs/cls_preds32.txt ./outputs/reg_preds8.txt ./outputs/reg_preds16.txt ./outputs/reg_preds32.txt ./outputs/seg_preds8.txt ./outputs/seg_preds16.txt ./outputs/seg_preds32.txt ./outputs/mask_input.txt
-*/
-
-/*
-After NMS output
-======Index: 0======
-Box Position: 496.098450, 196.839951, 558.655457, 341.662231
-Confidence: 0.943630 
-Label: 0 
-First 3 mask coeffs: -0.002038, 0.035050, -0.093406
-======Index: 1======
-Box Position: 263.882141, 367.571228, 376.792908, 490.456238
-Confidence: 0.913981 
-Label: 16 
-First 3 mask coeffs: -0.032480, -0.185846, 0.176836
-======Index: 2======
-Box Position: 483.988342, 342.410767, 586.628845, 431.275635
-Confidence: 0.913909 
-Label: 16 
-First 3 mask coeffs: -0.078615, -0.105044, 0.319571
-======Index: 3======
-Box Position: 37.144051, 274.736267, 88.445816, 452.130920
-Confidence: 0.900443 
-Label: 0 
-First 3 mask coeffs: 0.048116, -0.035240, -0.068219
-======Index: 4======
-Box Position: 159.593872, 423.177673, 212.107727, 473.202698
-Confidence: 0.889873 
-Label: 16 
-First 3 mask coeffs: -0.180799, 0.274203, 0.087585
-======Index: 5======
-Box Position: 101.557365, 361.983704, 172.068848, 440.894104
-Confidence: 0.882814 
-Label: 16 
-First 3 mask coeffs: -0.124123, 0.136503, 0.259379
-======Index: 6======
-Box Position: 214.535736, 301.623230, 266.269531, 382.887878
-Confidence: 0.864283 
-Label: 0 
-First 3 mask coeffs: -0.112651, 0.309662, -0.076536
-======Index: 7======
-Box Position: 350.345337, 290.823669, 372.778992, 339.081116
-Confidence: 0.788122 
-Label: 0 
-First 3 mask coeffs: -0.427509, 0.263954, -0.555481
-======Index: 8======
-Box Position: 336.352234, 317.848511, 362.574158, 371.942871
-Confidence: 0.739948 
-Label: 0 
-First 3 mask coeffs: -0.114220, 0.482586, -0.248823
-======Index: 9======
-Box Position: 260.837372, 297.721680, 278.164764, 326.434387
-Confidence: 0.422207 
-Label: 0 
-First 3 mask coeffs: -0.073450, 0.230403, -0.755010
-======================
-*/
-
-/*
-tensor([[1.48400e+03, 2.21000e+02, 1.67100e+03, 6.54000e+02, 9.43630e-01, 0.00000e+00],
-        [7.89000e+02, 7.31000e+02, 1.12700e+03, 1.09900e+03, 9.13981e-01, 1.60000e+01],
-        [1.44700e+03, 6.56000e+02, 1.75400e+03, 9.22000e+02, 9.13909e-01, 1.60000e+01],
-        [1.11000e+02, 4.54000e+02, 2.65000e+02, 9.84000e+02, 9.00443e-01, 0.00000e+00]])
-*/
-
 /* 
-384 * 640
-======Index: 0======
-Box Position: 496.742889, 72.740685, 558.141663, 212.283295
-Confidence: 0.911777 
-Label: 0 
-Mask Coeffs: 0.000000, 0.036110, -0.072220, 0.409245 
-======Index: 1======
-Box Position: 37.394318, 148.274445, 88.559937, 321.307251
-Confidence: 0.911777 
-Label: 0 
-Mask Coeffs: 0.048146, -0.012037, -0.048146, 0.457392 
-======Index: 2======
-Box Position: 484.089264, 214.694946, 586.420532, 300.281067
-Confidence: 0.911777 
-Label: 16 
-Mask Coeffs: -0.060183, -0.144439, 0.288879, 0.132403 
-======Index: 3======
-Box Position: 264.952698, 241.524338, 376.237488, 356.713837
-Confidence: 0.893720 
-Label: 16 
-Mask Coeffs: -0.043946, -0.131839, 0.219732, 0.076906 
-======Index: 4======
-Box Position: 159.812622, 293.394318, 212.838806, 340.838806
-Confidence: 0.884338 
-Label: 16 
-Mask Coeffs: -0.144439, 0.373135, 0.072220, -0.252769 
-======Index: 5======
-Box Position: 214.509766, 174.137222, 266.605682, 251.350800
-Confidence: 0.876406 
-Label: 0 
-Mask Coeffs: -0.096293, 0.300916, -0.036110, 0.000000 
-======Index: 6======
-Box Position: 101.579491, 233.485794, 173.211365, 309.769104
-Confidence: 0.859139 
-Label: 16 
-Mask Coeffs: -0.132403, 0.132403, 0.300916, -0.060183 
-======Index: 7======
-Box Position: 350.157379, 163.465744, 372.843903, 211.530426
-Confidence: 0.769491 
-Label: 0 
-Mask Coeffs: -0.427589, 0.277933, -0.545176, -0.096208 
-======Index: 8======
-Box Position: 337.233521, 189.623123, 361.842621, 243.071045
-Confidence: 0.769491 
-Label: 0 
-Mask Coeffs: -0.160346, 0.491728, -0.277933, -0.256554 
-======Index: 9======
-Box Position: 261.463196, 170.002548, 278.381958, 198.456833
-Confidence: 0.471330 
-Label: 0 
-Mask Coeffs: -0.085518, 0.224484, -0.801730, -0.459658 
-======Index: 10======
-Box Position: 498.237335, 71.470840, 557.453003, 127.994904
-Confidence: 0.251498 
-Label: 0 
-Mask Coeffs: -0.085518, 0.352761, 0.299312, -0.577246 
-======================
-
-loutputs:
-tensor([[1.49900e+03, 2.23000e+02, 1.68800e+03, 6.51000e+02, 9.11777e-01, 0.00000e+00],
-        [9.00000e+01, 4.55000e+02, 2.47000e+02, 9.86000e+02, 9.11777e-01, 0.00000e+00],
-        [1.46300e+03, 6.56000e+02, 1.77400e+03, 9.24000e+02, 9.11777e-01, 1.60000e+01],
-        [7.88000e+02, 7.41000e+02, 1.13000e+03, 1.09400e+03, 8.93720e-01, 1.60000e+01],
-        [4.66000e+02, 9.00000e+02, 6.28000e+02, 1.04600e+03, 8.84338e-01, 1.60000e+01],
-        [6.33000e+02, 5.34000e+02, 7.93000e+02, 7.71000e+02, 8.76406e-01, 0.00000e+00],
-        [2.87000e+02, 7.16000e+02, 5.07000e+02, 9.50000e+02, 8.59139e-01, 1.60000e+01],
-        [1.05000e+03, 5.01000e+02, 1.11900e+03, 6.49000e+02, 7.69491e-01, 0.00000e+00],
-        [1.01000e+03, 5.82000e+02, 1.08500e+03, 7.46000e+02, 7.69491e-01, 0.00000e+00],
-        [7.77000e+02, 5.22000e+02, 8.29000e+02, 6.09000e+02, 4.71330e-01, 0.00000e+00],
-        [1.50400e+03, 2.19000e+02, 1.68500e+03, 3.93000e+02, 2.51498e-01, 0.00000e+00]])
-        
-tensor([[ 0.00000,  0.03611, -0.07222,  0.40925],
-        [ 0.04815, -0.01204, -0.04815,  0.45739],
-        [-0.08426, -0.09629,  0.32499,  0.16851],
-        [-0.04395, -0.13184,  0.21973,  0.07691],
-        [-0.14444,  0.37314,  0.07222, -0.25277],
-        [-0.09629,  0.30092, -0.03611,  0.00000],
-        [-0.13240,  0.13240,  0.30092, -0.06018],
-        [-0.42759,  0.27793, -0.54518, -0.09621],
-        [-0.16035,  0.49173, -0.27793, -0.25655],
-        [-0.08552,  0.22448, -0.80173, -0.45966],
-        [-0.08552,  0.35276,  0.29931, -0.57725]])
-
+Type:
+gcc main.c -o T ./Sources/Input.c ./Sources/Bbox.c  `pkg-config --cflags --libs opencv` -lm
+./T ./ImgData.txt ./outputs/cls_preds8.txt ./outputs/cls_preds16.txt ./outputs/cls_preds32.txt ./outputs/reg_preds8.txt ./outputs/reg_preds16.txt ./outputs/reg_preds32.txt ./outputs/seg_preds8.txt ./outputs/seg_preds16.txt ./outputs/seg_preds32.txt ./outputs/mask_input.txt
 */
