@@ -369,7 +369,7 @@ int main(int argc, const char **argv)
         strcat(FinalDirectory, BaseName);
         cvSaveImage(FinalDirectory, Img, 0);
         cvReleaseImage(&Img);
-        printf("===============%s Complete===============\n", NameBuffer);
+        printf("===============Complete===============\n");
         printf("\n\n");
         ++ImageCount;
     }
