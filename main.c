@@ -13,7 +13,6 @@
 
 #include "Post_NMS.c"
 
-
 // dist2bbox & generate_anchor in YOLOv6
 static void post_regpreds(float (*distance)[4], char *type)
 {
@@ -295,13 +294,13 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
     printf("NMS Done,Got %d Detections...\n", *NumDetections);
 
     CopyMaskCoeffs(MaskCoeffs, *NumDetections, ValidDetections);
-    PrintObjectData(*NumDetections, ValidDetections);
+    //PrintObjectData(*NumDetections, ValidDetections);
 }
 
 
 
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
-static inline void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage* Img, uint8_t* Mask, CvScalar TextColor, float* pred_mask){
+static inline void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage* Img, uint8_t* Mask, CvScalar TextColor){
     printf("Drawing Labels and Segments...\n");
 
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
@@ -311,36 +310,75 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
 
     for(int i = 0 ; i < NumDetections ; ++i){
         memset(Mask, 0, mask_size_w * mask_size_h * sizeof(uint8_t));
-        memset(pred_mask, 0, mask_size_w * mask_size_h * sizeof(float) / 16);
         struct Object* Detect = &ValidDetections[i];
-        // May cause "SEGMENTATION FAULT" contributed by memory out of bound (> 640 or < 0) in BilinearInterpolation
-        handle_proto_test(Detect, Mask_Input, Mask, pred_mask);
+        handle_proto_test(Detect, Mask_Input, Mask);
         rescalebox(&Detect->Rect, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
         RescaleMaskandDrawMask(Detect, Mask, Img, mask_xyxy);
     }
-    printf("Drew %d Masks...\n", NumDetections);
 
     int Thickness = (int) fmaxf(roundf((Img->width + Img->height) / 2.f * 0.003f), 2);
 
     for(int i = NumDetections - 1  ; i > -1 ; --i){
-        //String Append Label + Confidence
-        char* Label = GetClassName(ValidDetections[i].label);
-        char FinalLabel[20];
-        strcpy(FinalLabel, Label);
-        size_t len = strlen(FinalLabel);
-        FinalLabel[len] = ' ';
-        sprintf(FinalLabel + len + 1, "%.2f", ValidDetections[i].conf);
-
-        DrawLabel(ValidDetections[i].Rect, ValidDetections[i].label, FinalLabel, Thickness, TextColor, Img);
+        DrawLabel(ValidDetections[i].Rect, ValidDetections[i].conf, ValidDetections[i].label, Thickness, TextColor, Img);
     }
-
-    printf("Drew %d Lables...\n", NumDetections);
     printf("============Post Processing Complete.============\n");
 }
 
-
 int main(int argc, const char **argv)
 {
+
+    FILE *ImageDataFile;
+    char NameBuffer[MAX_FILENAME_LENGTH];
+
+    CvScalar TextColor = CV_RGB(255, 255, 255);
+    static uint8_t Mask[TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
+
+
+    // Open the file for reading
+    ImageDataFile = fopen(argv[1], "r");
+    if (ImageDataFile == NULL) {
+        printf("Error opening file %s\n", argv[1]);
+        return;
+    }
+    int ImageCount = 0;
+    // Read the string from the file
+    while (fgets(NameBuffer, sizeof(NameBuffer), ImageDataFile) != NULL) {
+        char FinalDirectory[MAX_FILENAME_LENGTH] = "./Results/result";
+        NameBuffer[strcspn(NameBuffer, "\n")] = '\0';
+
+        IplImage* Img = cvLoadImage(NameBuffer, CV_LOAD_IMAGE_COLOR);
+        if(!Img){
+            printf("%s not found\n", NameBuffer);
+            return;
+        }
+
+        float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
+        float Mask_Coeffs[MAX_DETECTIONS][NUM_MASKS];
+
+        struct Object ValidDetections[MAX_DETECTIONS]; 
+        int NumDetections = 0;
+
+        // Preprocessing + NMS 
+        PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, Mask_Coeffs, argv);
+
+        // Store Masks Results
+        PostProcessing(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor);
+
+
+        // Save Images
+        char* BaseName = strrchr(NameBuffer, '/');
+        if(BaseName != NULL){
+            BaseName++;
+        }
+        strcat(FinalDirectory, BaseName);
+        cvSaveImage(FinalDirectory, Img, 0);
+        cvReleaseImage(&Img);
+        ++ImageCount;
+    }
+    // Close the file
+    fclose(ImageDataFile);
+    printf("All Image Read and Released\n");
+    /*
     IplImage* Img = cvLoadImage( argv[1], CV_LOAD_IMAGE_COLOR);
     if(!Img){
         printf("---No Img---\n");
@@ -351,8 +389,7 @@ int main(int argc, const char **argv)
     float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
     float Mask_Coeffs[MAX_DETECTIONS][NUM_MASKS];
 
-    static uint8_t Mask[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH] = {0};
-    static float pred_Mask[MASK_SIZE_WIDTH * MASK_SIZE_HEIGHT] = {0};
+    static uint8_t Mask[TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
 
     // Recorded Detections for NMS
     struct Object ValidDetections[MAX_DETECTIONS]; 
@@ -363,7 +400,7 @@ int main(int argc, const char **argv)
     //PrintObjectData(NumDetections, ValidDetections);
 
     // Store Masks Results
-    PostProcessing(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor, pred_Mask);
+    PostProcessing(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor);
     
     // ========================
     // Display Output
@@ -372,11 +409,17 @@ int main(int argc, const char **argv)
     cvShowImage("Final Output", Img);
     cvWaitKey(0);
     cvDestroyAllWindows();
-    cvSaveImage("Result.jpg", Img, 0);
+    cvSaveImage("./Results/Result.jpg", Img, 0);
     cvReleaseImage(&Img);
     printf("Original Image Released.");
+    */
     return 0;
 }
+/*
+gcc main.c -o T ./Sources/Input.c ./Sources/Bbox.c  `pkg-config --cflags --libs opencv` -lm
+time ./T ./Images/img.jpg ./outputs/cls_preds8.txt ./outputs/cls_preds16.txt ./outputs/cls_preds32.txt ./outputs/reg_preds8.txt ./outputs/reg_preds16.txt ./outputs/reg_preds32.txt ./outputs/seg_preds8.txt ./outputs/seg_preds16.txt ./outputs/seg_preds32.txt ./outputs/mask_input.txt
+*/
+
 /*
 After NMS output
 ======Index: 0======

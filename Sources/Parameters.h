@@ -24,6 +24,8 @@
 #define CONF_THRESHOLD 0.25f
 #define NMS_THRESHOLD 0.45f
 
+#define MAX_FILENAME_LENGTH 20
+
 // Bool
 #define AGNOSTIC 0
 #define MULTI_LABEL 0

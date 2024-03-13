@@ -12,6 +12,19 @@
 #include <math.h>
 int cvRound(double value) {return(ceil(value));}
 
+static char* names[] = {
+        "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
+        "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
+        "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+        "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
+        "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
+        "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
+        "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
+        "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
+        "hair drier", "toothbrush"};
+
+static unsigned int hex_colors[20] = {0xFF3838, 0xFF9D97, 0xFF701F, 0xFFB21D, 0xCFD231, 0x48F90A, 0x92CC17, 0x3DDB86, 0x1A9334, 0x00D4BB,
+                                          0x2C99A8, 0x00C2FF, 0x344593, 0x6473FF, 0x0018EC, 0x8438FF, 0x520085, 0xCB38FF, 0xFF95C8, 0xFF37C7};
 
 static void sigmoid(int rowsize, int colsize, float *ptr)
 {
@@ -30,7 +43,7 @@ static inline void getMaskxyxy(int* xyxy, float org_size_w, float org_size_h, fl
     xyxy[3] = org_size_h - padding_h; // bottom
     return;
 }
-
+/*
 static float GetPixel(int x, int y, int width, int height, float *Src){
     if(x < 0 || x >= width || y < 0 || y >= height) return 0.f;
     return *(Src + y*width + x);
@@ -68,19 +81,22 @@ static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struc
         }
     }
 }
+*/
 
 // Obtain Uncropped Mask
-static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], uint8_t* UncroppedMask, float* pred_mask)
+static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], uint8_t* UncroppedMask)
 {
     // Resize mask & Obtain Binary Mask
     // Matrix Multiplication
     float* maskcoeffs = obj->maskcoeff;
     struct Bbox box = obj->Rect;
 
-    float Binary_Thres = 0.5f;
+    float Binary_Thres = 0.2f;
     int mask_size_w = MASK_SIZE_WIDTH;
     int mask_size_h = MASK_SIZE_HEIGHT;
-    // Obtain Uncropped Mask (size 160*160)
+    float pred_mask[MASK_SIZE_WIDTH * MASK_SIZE_HEIGHT] = {0};
+    
+    
     for(int i = 0 ; i < MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH ; ++i){
         float Pixel = 0.f;
         for(int c = 0 ; c < NUM_MASKS ; ++c){
@@ -88,20 +104,46 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
         }
         pred_mask[i] = Pixel;
     }
-
+    
     sigmoid(MASK_SIZE_HEIGHT, MASK_SIZE_WIDTH, pred_mask);
+    CvScalar TextColor = CV_RGB(255, 255, 255);
+    
     IplImage* SrcMask = cvCreateImageHeader(cvSize(MASK_SIZE_WIDTH, MASK_SIZE_HEIGHT), IPL_DEPTH_32F, 1); 
     cvSetData(SrcMask, pred_mask, SrcMask->widthStep);
-    cvNamedWindow("Pred_Mask", CV_WINDOW_AUTOSIZE);
-    cvShowImage("Pred_Mask", SrcMask);
-    cvWaitKey(0);
-    cvDestroyWindow("Pred_Mask");
+
+    IplImage* SrcMask_Resized = cvCreateImage(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), SrcMask->depth, 1); 
+    cvResize(SrcMask, SrcMask_Resized, CV_INTER_LINEAR);
+    
+    // ROI Mask
+    IplImage* ZeroMask = cvCreateImage(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), SrcMask->depth, 1);
+    cvZero(ZeroMask);
+    cvRectangle(ZeroMask, cvPoint(box.left, box.top), cvPoint(box.right, box.bottom), cvScalar(1, 1, 1, 0), CV_FILLED, CV_AA, 0);
+
+    // Keep the Mask only in the ROI region
+    cvAnd(SrcMask_Resized, ZeroMask, SrcMask_Resized, NULL);
+
+    // Thresholding
+    cvThreshold(SrcMask_Resized, SrcMask_Resized, 0.45f, 1.f, CV_THRESH_BINARY);
+
+    // float2uint8_t mask
+    IplImage* SrcMask_uint8 = cvCreateImage(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);
+    cvConvertScale(SrcMask_Resized, SrcMask_uint8, 255, 0);
+
+    memcpy(UncroppedMask, SrcMask_uint8->imageData, mask_size_h * mask_size_w * 16 * sizeof(uint8_t));
+
+    // cvNamedWindow("Pred_Mask", CV_WINDOW_AUTOSIZE);
+    // cvShowImage("Pred_Mask", SrcMask_uint8);
+    // cvWaitKey(0);
+    // cvDestroyWindow("Pred_Mask");
 
     cvReleaseImage(&SrcMask);
+    cvReleaseImage(&SrcMask_Resized);
+    cvReleaseImage(&ZeroMask);
+    cvReleaseImage(&SrcMask_uint8);
+
     // Bilinear Interpolate + Binary Threshold 
     // Obtain Uncropped Mask (size 640 * 640)
-    BilinearInterpolate(pred_mask, UncroppedMask, Binary_Thres, box);
-    
+    //BilinearInterpolate(pred_mask, UncroppedMask, Binary_Thres, box);
 }
 
 // Rescale Bbox: Bounding Box positions to Real place
@@ -120,16 +162,10 @@ static void rescalebox(struct Bbox *Box, float src_size_w, float src_size_h, flo
 }
 
 static char* GetClassName(int ClassIndex){
-    char* names[] = {
-        "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
-        "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-        "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee"};
     return names[ClassIndex];
 }
 
 static CvScalar Generate_Color(int ClassIndex){
-    const unsigned int hex_colors[20] = {0xFF3838, 0xFF9D97, 0xFF701F, 0xFFB21D, 0xCFD231, 0x48F90A, 0x92CC17, 0x3DDB86, 0x1A9334, 0x00D4BB,
-                                          0x2C99A8, 0x00C2FF, 0x344593, 0x6473FF, 0x0018EC, 0x8438FF, 0x520085, 0xCB38FF, 0xFF95C8, 0xFF37C7};
     int ColorIndex = ClassIndex % 20;
     return CV_RGB((hex_colors[ColorIndex] >> 16) & 0xFF,  (hex_colors[ColorIndex] >> 8) & 0xFF, hex_colors[ColorIndex] & 0xFF);
 }
@@ -143,14 +179,18 @@ static void DrawMask(const int ClassLabel, float mask_transparency, IplImage* ma
     COLOR.val[1] *= mask_transparency;
     COLOR.val[2] *= mask_transparency;
 
-    // cvNamedWindow("Final Output", CV_WINDOW_AUTOSIZE);
-    // cvShowImage("Final Output", mask);
-    // cvWaitKey(0);
-    // cvDestroyAllWindows();
     cvAddS(ImgSrc, COLOR, ImgSrc, mask);
 }
 
-static void DrawLabel(const struct Bbox box, const int ClassLabel, const char* label, int boxthickness, CvScalar TextColor, IplImage* ImgSrc){
+static void DrawLabel(const struct Bbox box, const float conf, const int ClassLabel, int boxthickness, CvScalar TextColor, IplImage* ImgSrc){
+    //String Append Label + Confidence
+    char* Label = GetClassName(ClassLabel);
+    char FinalLabel[20];
+    strcpy(FinalLabel, Label);
+    size_t len = strlen(FinalLabel);
+    FinalLabel[len] = ' ';
+    sprintf(FinalLabel + len + 1, "%.2f", conf);
+
     CvScalar COLOR = Generate_Color(ClassLabel);
     int left = (int)box.left, top = (int)box.top;
     // Draw Bounding Box
@@ -163,7 +203,7 @@ static void DrawLabel(const struct Bbox box, const int ClassLabel, const char* l
     CvFont font; // font for text
     cvInitFont(&font, CV_FONT_HERSHEY_COMPLEX, 1.f, 1.f, 0, boxthickness / 2, CV_AA);
 
-    cvGetTextSize(label, &font, &label_size, &baseLine);
+    cvGetTextSize(FinalLabel, &font, &label_size, &baseLine);
 
     brp.x = left + label_size.width;
     brp.y = top;
@@ -172,7 +212,7 @@ static void DrawLabel(const struct Bbox box, const int ClassLabel, const char* l
     // Draw Background
     cvRectangle(ImgSrc, tlp, brp, COLOR, CV_FILLED, CV_AA, 0);
     // Draw Label
-    cvPutText(ImgSrc, label, cvPoint(left, top - baseLine), &font, TextColor);
+    cvPutText(ImgSrc, FinalLabel, cvPoint(left, top - baseLine), &font, TextColor);
 }
 
 static void RescaleMaskandDrawMask(struct Object* obj, uint8_t* UnCropedMask, IplImage* ImgSrc, int* mask_xyxy){
