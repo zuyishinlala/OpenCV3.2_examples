@@ -8,7 +8,7 @@
             "type": "cppdbg",
             "request": "launch", 
             "program": "${fileDirname}/${fileBasenameNoExtension}",
-            "args": ["./Images/img1.jpg","./Images/img2.png"],
+            "args": [],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],

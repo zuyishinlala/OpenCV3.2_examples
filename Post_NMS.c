@@ -91,7 +91,7 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
     float* maskcoeffs = obj->maskcoeff;
     struct Bbox box = obj->Rect;
 
-    float Binary_Thres = 0.2f;
+    float Binary_Thres = 0.45f;
     int mask_size_w = MASK_SIZE_WIDTH;
     int mask_size_h = MASK_SIZE_HEIGHT;
     float pred_mask[MASK_SIZE_WIDTH * MASK_SIZE_HEIGHT] = {0};
@@ -123,7 +123,7 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
     cvAnd(SrcMask_Resized, ZeroMask, SrcMask_Resized, NULL);
 
     // Thresholding
-    cvThreshold(SrcMask_Resized, SrcMask_Resized, 0.45f, 1.f, CV_THRESH_BINARY);
+    cvThreshold(SrcMask_Resized, SrcMask_Resized, Binary_Thres, 1.f, CV_THRESH_BINARY);
 
     // float2uint8_t mask
     IplImage* SrcMask_uint8 = cvCreateImage(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);

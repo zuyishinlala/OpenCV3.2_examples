@@ -7,7 +7,7 @@
 #include <opencv/highgui.h>
 
 #include "./Sources/Object.h"
-#include "./Sources/Parameters.h"
+#include "./Sources/Parameters.h" 
 #include "./Sources/Input.h"
 #include "./Sources/Bbox.h"
 
@@ -379,7 +379,9 @@ int main(int argc, const char **argv)
     return 0;
 }
 /* 
+================================================================================================================================================================
 Type:
 gcc main.c -o T ./Sources/Input.c ./Sources/Bbox.c  `pkg-config --cflags --libs opencv` -lm
 ./T ./ImgData.txt ./outputs/cls_preds8.txt ./outputs/cls_preds16.txt ./outputs/cls_preds32.txt ./outputs/reg_preds8.txt ./outputs/reg_preds16.txt ./outputs/reg_preds32.txt ./outputs/seg_preds8.txt ./outputs/seg_preds16.txt ./outputs/seg_preds32.txt ./outputs/mask_input.txt
+================================================================================================================================================================
 */
