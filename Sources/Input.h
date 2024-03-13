@@ -10,8 +10,8 @@ struct Pred_Input{
     float seg_pred[ROWSIZE][NUM_MASKS];   // mask coefficients
 };
 
-void initPredInput(struct Pred_Input* input, float* mask_ptr, const char** argv);
-void initPredInput_pesudo(struct Pred_Input* input, float* mask_ptr, const char** argv);
-void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName);
-void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName);
+void initPredInput(struct Pred_Input* input, float* mask_ptr, const char** argv, int ImgIndex);
+//void initPredInput_pesudo(struct Pred_Input* input, float* mask_ptr, const char** argv);
+void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName, int ImgIndex);
+void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName,int ImgIndex);
 #endif // OBJECTS_H

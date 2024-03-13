@@ -275,7 +275,7 @@ static inline void PrintObjectData(int NumDetections, struct Object* ValidDetect
 }
 
 // Read Inputs + Pre-process of Inputs + NMS
-static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct Object *ValidDetections, float (*MaskCoeffs)[NUM_MASKS], const char** argv){
+static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct Object *ValidDetections, float (*MaskCoeffs)[NUM_MASKS], const char** argv, int ImageIndex){
     char* Bboxtype = "xyxy";
     char* classes = NULL;
 
@@ -283,11 +283,10 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
     // ========================
     // Init Inputs(9 prediction input + 1 mask input) in Sources/Input.c
     // ========================
-    initPredInput(&input, Mask_Input, argv);
-    printf("======Init Input Complete======\n");
+    initPredInput(&input, Mask_Input, argv, ImageIndex);
+    print_data(&input.reg_pred[0][0], 4, 4);
     sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
     post_regpreds(input.reg_pred, Bboxtype);
-    print_data(Mask_Input, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, 4);
     //initPredInput_pesudo(&input, Mask_Input, argv);
 
     non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
@@ -338,7 +337,7 @@ int main(int argc, const char **argv)
     ImageDataFile = fopen(argv[1], "r");
     if (ImageDataFile == NULL) {
         printf("Error opening file %s\n", argv[1]);
-        return;
+        return 0;
     }
     int ImageCount = 0;
     // Read the string from the file
@@ -349,7 +348,7 @@ int main(int argc, const char **argv)
         IplImage* Img = cvLoadImage(NameBuffer, CV_LOAD_IMAGE_COLOR);
         if(!Img){
             printf("%s not found\n", NameBuffer);
-            return;
+            return 0;
         }
 
         float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
@@ -359,7 +358,7 @@ int main(int argc, const char **argv)
         int NumDetections = 0;
 
         // Preprocessing + NMS 
-        PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, Mask_Coeffs, argv);
+        PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, Mask_Coeffs, argv, ImageCount);
 
         // Store Masks Results
         PostProcessing(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor);

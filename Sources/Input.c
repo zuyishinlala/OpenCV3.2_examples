@@ -1,13 +1,26 @@
 #include "Input.h"
 
-void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName){
+void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName, int ImageIndex){
     FILE *file = fopen( FileName, "r");
+    printf("Reading...%s",FileName);
 
     if (file == NULL) {
         printf("Error opening file %s\n", FileName);
         return;
     }
-
+    for(int i = 0 ; i < ImageIndex ; ++i){
+        for(int c = 0 ; c < ColSize ; ++c){
+            for(int r = 0 ; r < RowSize ; ++r){
+                float num ;
+                if (fscanf( file, "%f", &num) != 1) {
+                    printf("Error reading from file %s\n", FileName);
+                    return;
+                }
+            }
+        }
+    }
+    
+    
     for(int c = 0 ; c < ColSize ; ++c){
         for(int r = 0 ; r < RowSize ; ++r){
             if (fscanf( file, "%f", Dst+r*ColSize+c) != 1) {
@@ -18,11 +31,11 @@ void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName){
             }
         }
     }
-    
+    printf("Reading %s complete\n",FileName);
     fclose(file);
 }
 
-void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName) {
+void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName, int ImageIndex) {
     FILE *file = fopen(FileName, "r");
 
     if (file == NULL) {
@@ -30,6 +43,18 @@ void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName) 
         return;
     }
 
+    for(int i = 0 ; i < ImageIndex ; ++i){
+        for(int c = 0 ; c < ColSize ; ++c){
+            for(int r = 0 ; r < RowSize ; ++r){
+                float num ;
+                if (fscanf( file, "%f", &num) != 1) {
+                    printf("Error reading from file %s\n", FileName);
+                    return;
+                }
+            }
+        }
+    }
+    
     for (int i = 0; i < RowSize; i++) {
         for (int j = 0; j < ColSize; j++) {
             if (fscanf(file, "%f", mask + i*ColSize + j) != 1) {
@@ -42,7 +67,7 @@ void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName) 
 
     fclose(file);
 }
-
+/*
 void initPredInput_pesudo(struct Pred_Input* input, float* mask_ptr, const char** argv){
     float* cls_ptr = &input->cls_pred[0][0];
     float* reg_ptr = &input->reg_pred[0][0];
@@ -53,8 +78,8 @@ void initPredInput_pesudo(struct Pred_Input* input, float* mask_ptr, const char*
     ReadMaskInput(seg_ptr, ROWSIZE, NUM_MASKS, argv[4]);
     ReadMaskInput(mask_ptr, NUM_MASKS, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, argv[5]);
 }
-
-void initPredInput(struct Pred_Input* input, float* mask_ptr, const char** argv){
+*/
+void initPredInput(struct Pred_Input* input, float* mask_ptr, const char** argv, int ImageIndex){
     printf("=====Reading Prediction Input...   =====\n");
     
     float* cls_ptr = &input->cls_pred[0][0];
@@ -62,37 +87,37 @@ void initPredInput(struct Pred_Input* input, float* mask_ptr, const char** argv)
     float* seg_ptr = &input->seg_pred[0][0];
     
     // Cls_Predictions
-    ReadFile(cls_ptr, WIDTH0*HEIGHT0, NUM_CLASSES, argv[2]);
+    ReadFile(cls_ptr, WIDTH0*HEIGHT0, NUM_CLASSES, argv[2], ImageIndex);
 
     cls_ptr += WIDTH0*HEIGHT0*NUM_CLASSES;
-    ReadFile(cls_ptr, WIDTH1*HEIGHT1, NUM_CLASSES, argv[3]);
+    ReadFile(cls_ptr, WIDTH1*HEIGHT1, NUM_CLASSES, argv[3], ImageIndex);
 
     cls_ptr += WIDTH1*HEIGHT1*NUM_CLASSES;
-    ReadFile(cls_ptr, WIDTH2*HEIGHT2, NUM_CLASSES, argv[4]);
+    ReadFile(cls_ptr, WIDTH2*HEIGHT2, NUM_CLASSES, argv[4], ImageIndex);
 
     // Reg_Predictions
-    ReadFile(reg_ptr, WIDTH0*HEIGHT0, 4, argv[5]);
+    ReadFile(reg_ptr, WIDTH0*HEIGHT0, 4, argv[5], ImageIndex);
 
     reg_ptr += WIDTH0*HEIGHT0*4;
-    ReadFile(reg_ptr, WIDTH1*HEIGHT1, 4, argv[6]);
+    ReadFile(reg_ptr, WIDTH1*HEIGHT1, 4, argv[6], ImageIndex);
 
     reg_ptr += WIDTH1*HEIGHT1*4;
-    ReadFile(reg_ptr, WIDTH2*HEIGHT2, 4, argv[7]);
+    ReadFile(reg_ptr, WIDTH2*HEIGHT2, 4, argv[7], ImageIndex);
 
     // Seg_Predictions
-    ReadFile(seg_ptr, WIDTH0*HEIGHT0, NUM_MASKS, argv[8]);
+    ReadFile(seg_ptr, WIDTH0*HEIGHT0, NUM_MASKS, argv[8], ImageIndex);
 
     seg_ptr += WIDTH0*HEIGHT0*NUM_MASKS;
-    ReadFile(seg_ptr, WIDTH1*HEIGHT1, NUM_MASKS, argv[9]);
+    ReadFile(seg_ptr, WIDTH1*HEIGHT1, NUM_MASKS, argv[9], ImageIndex);
  
     seg_ptr += WIDTH1*HEIGHT1*NUM_MASKS;
-    ReadFile(seg_ptr, WIDTH2*HEIGHT2, NUM_MASKS, argv[10]);
+    ReadFile(seg_ptr, WIDTH2*HEIGHT2, NUM_MASKS, argv[10], ImageIndex);
 
-    ReadMaskInput(mask_ptr, NUM_MASKS, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, argv[11]);
+    ReadMaskInput(mask_ptr, NUM_MASKS, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, argv[11], ImageIndex);
 }
 
 /*
   gcc main.c -o T ./Sources/Input.c ./Sources/Bbox.c  `pkg-config --cflags --libs opencv` -lm
-  time ./T ./Images/img.jpg ./outputs/cls_preds8.txt ./outputs/cls_preds16.txt ./outputs/cls_preds32.txt ./outputs/reg_preds8.txt ./outputs/reg_preds16.txt ./outputs/reg_preds32.txt ./outputs/seg_preds8.txt ./outputs/seg_preds16.txt ./outputs/seg_preds32.txt ./outputs/mask_input.txt
+ ./T ./ImgData.txt ./outputs/cls_preds8.txt ./outputs/cls_preds16.txt ./outputs/cls_preds32.txt ./outputs/reg_preds8.txt ./outputs/reg_preds16.txt ./outputs/reg_preds32.txt ./outputs/seg_preds8.txt ./outputs/seg_preds16.txt ./outputs/seg_preds32.txt ./outputs/mask_input.txt
  ./T ./Images/img.jpg  ./Outputs/regs_preds.txt ./Outputs/cls_preds.txt ./Outputs/seg_preds.txt ./Outputs/masks.txt 
 */
