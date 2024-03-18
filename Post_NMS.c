@@ -11,6 +11,7 @@
 
 #include <math.h>
 int cvRound(double value) {return(ceil(value));}
+float cvRoundf(float value) {return roundf(value);}
 
 static char* names[] = {
         "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
@@ -92,10 +93,7 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
     struct Bbox box = obj->Rect;
 
     float Binary_Thres = 0.45f;
-    int mask_size_w = MASK_SIZE_WIDTH;
-    int mask_size_h = MASK_SIZE_HEIGHT;
     float pred_mask[MASK_SIZE_WIDTH * MASK_SIZE_HEIGHT] = {0};
-    
     
     for(int i = 0 ; i < MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH ; ++i){
         float Pixel = 0.f;
@@ -106,7 +104,6 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
     }
     
     sigmoid(MASK_SIZE_HEIGHT, MASK_SIZE_WIDTH, pred_mask);
-    CvScalar TextColor = CV_RGB(255, 255, 255);
     
     IplImage* SrcMask = cvCreateImageHeader(cvSize(MASK_SIZE_WIDTH, MASK_SIZE_HEIGHT), IPL_DEPTH_32F, 1); 
     cvSetData(SrcMask, pred_mask, SrcMask->widthStep);
@@ -129,7 +126,7 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
     IplImage* SrcMask_uint8 = cvCreateImage(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);
     cvConvertScale(SrcMask_Resized, SrcMask_uint8, 255, 0);
 
-    memcpy(UncroppedMask, SrcMask_uint8->imageData, mask_size_h * mask_size_w * 16 * sizeof(uint8_t));
+    memcpy(UncroppedMask, SrcMask_uint8->imageData, sizeof(uint8_t) * TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT);
 
     // cvNamedWindow("Pred_Mask", CV_WINDOW_AUTOSIZE);
     // cvShowImage("Pred_Mask", SrcMask_uint8);
@@ -159,6 +156,11 @@ static void rescalebox(struct Bbox *Box, float src_size_w, float src_size_h, flo
     Box->bottom = (Box->bottom - padding_h) / ratio;
 
     clamp(Box, tar_size_w, tar_size_h);
+
+    Box->left = cvRoundf(Box->left);
+    Box->right = cvRoundf(Box->right);
+    Box->top = cvRoundf(Box->top);
+    Box->bottom = cvRoundf(Box->bottom);
 }
 
 static char* GetClassName(int ClassIndex){
@@ -215,7 +217,7 @@ static void DrawLabel(const struct Bbox box, const float conf, const int ClassLa
     cvPutText(ImgSrc, FinalLabel, cvPoint(left, top - baseLine), &font, TextColor);
 }
 
-static void RescaleMaskandDrawMask(struct Object* obj, uint8_t* UnCropedMask, IplImage* ImgSrc, int* mask_xyxy){
+static void RescaleMaskandDrawMask(const int Label, uint8_t* UnCropedMask, IplImage* ImgSrc, int* mask_xyxy){
 
     // uint8_t array to IplImage
     IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
@@ -234,7 +236,7 @@ static void RescaleMaskandDrawMask(struct Object* obj, uint8_t* UnCropedMask, Ip
     cvResize(roiImg, FinalMask, CV_INTER_LINEAR);
 
     // Draw Label and Task (int label to string)
-    DrawMask(obj->label, MASK_TRANSPARENCY, FinalMask, ImgSrc);
+    DrawMask(Label, MASK_TRANSPARENCY, FinalMask, ImgSrc);
 
     cvReleaseImage(&SrcMask);
     cvReleaseImage(&roiImg);

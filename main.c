@@ -11,6 +11,10 @@
 #include "./Sources/Input.h"
 #include "./Sources/Bbox.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "Post_NMS.c"
 
 // dist2bbox & generate_anchor in YOLOv6
@@ -202,6 +206,8 @@ static void GetOnlyClass(char* className, int *Candid, struct Object* candidates
     *Candid = ValidCandid;
 }
 */
+
+// Perform Sorting + NMS
 static void non_max_suppression_seg(struct Pred_Input *input, char *classes, struct Object *picked_objects, int* CountValidDetect, float conf_threshold)
 {
     // Calculate max class and prob for each row
@@ -246,7 +252,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     return;
 }
 
-static void CopyMaskCoeffs(float (*DstCoeffs)[32], const int NumDetections, struct Object *ValidDetections){
+static void CopyMaskCoeffs(float (*DstCoeffs)[NUM_MASKS], const int NumDetections, struct Object *ValidDetections){
     for(int i = 0 ; i < NumDetections ; ++i){
         memcpy(DstCoeffs[i], ValidDetections[i].maskcoeff, sizeof(float) * NUM_MASKS);
         ValidDetections[i].maskcoeff = &DstCoeffs[i][0];
@@ -275,7 +281,7 @@ static inline void PrintObjectData(int NumDetections, struct Object* ValidDetect
 }
 
 // Read Inputs + Pre-process of Inputs + NMS
-static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct Object *ValidDetections, float (*MaskCoeffs)[NUM_MASKS], const char** argv, int ImageIndex){
+static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct Object *ValidDetections, float (*MaskCoeffs)[NUM_MASKS], const char** argv, int ImageIndex, int SAVEMASK){
     char* Bboxtype = "xyxy";
     char* classes = NULL;
 
@@ -297,28 +303,213 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
 
 
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
-static inline void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage* Img, uint8_t* Mask, CvScalar TextColor){
+static inline void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage* Img, uint8_t(* Mask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], CvScalar TextColor){
     printf("Drawing Labels and Segments...\n");
 
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
     getMaskxyxy(mask_xyxy,  TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
-    int mask_size_w = TRAINED_SIZE_WIDTH;
-    int mask_size_h = TRAINED_SIZE_HEIGHT;
-
+    
     for(int i = 0 ; i < NumDetections ; ++i){
-        memset(Mask, 0, mask_size_w * mask_size_h * sizeof(uint8_t));
+        memset(Mask[i], 0,  sizeof(uint8_t) * TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT);
         struct Object* Detect = &ValidDetections[i];
-        handle_proto_test(Detect, Mask_Input, Mask);
+        handle_proto_test(Detect, Mask_Input,Mask[i]);
         rescalebox(&Detect->Rect, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
-        RescaleMaskandDrawMask(Detect, Mask, Img, mask_xyxy);
     }
 
     int Thickness = (int) fmaxf(roundf((Img->width + Img->height) / 2.f * 0.003f), 2);
 
-    for(int i = NumDetections - 1  ; i > -1 ; --i){
-        DrawLabel(ValidDetections[i].Rect, ValidDetections[i].conf, ValidDetections[i].label, Thickness, TextColor, Img);
+    for(int i = NumDetections - 1 ; i > -1 ; --i){
+        struct Object* Detect = &ValidDetections[i];
+        RescaleMaskandDrawMask(Detect->label, Mask[i], Img, mask_xyxy);
+        DrawLabel(Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
     }
 }
+
+
+// Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
+static inline void PostProcessingSaveMask(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH],
+                                          IplImage* Img, uint8_t(* Mask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], CvScalar TextColor,
+                                        uint8_t(* OverLapMask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], int* HASMASKS){
+    printf("Drawing Labels and Segments...\n");
+
+    int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
+    getMaskxyxy(mask_xyxy,  TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
+    
+    for(int i = 0 ; i < NumDetections ; ++i){
+        memset( Mask[i], 0,  sizeof(uint8_t) * TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT);
+        struct Object* Detect = &ValidDetections[i];
+        const int Class_Index = Detect->label;
+        handle_proto_test(Detect, Mask_Input, Mask[i]);
+    }
+    
+    // OverLap Masks
+    for(int i = 0 ; i < NumDetections ; ++i){
+        int Label = ValidDetections[i].label;
+        for(int r = 0 ; r < TRAINED_SIZE_HEIGHT ; ++r){
+            for(int c = 0 ; c < TRAINED_SIZE_WIDTH ; ++c){
+                OverLapMask[Label][r*TRAINED_SIZE_WIDTH + c] |= Mask[i][r*TRAINED_SIZE_WIDTH + c];
+            }
+        }
+        HASMASKS[Label] = 1;
+    }
+
+    int Thickness = (int) fmaxf(roundf((Img->width + Img->height) / 2.f * 0.003f), 2);
+    
+    for(int i = 0 ; i < NUM_CLASSES ; ++i){
+        if(HASMASKS[i]){
+            RescaleMaskandDrawMask(i, OverLapMask[i], Img, mask_xyxy);
+        }
+    }
+
+    for(int i = NumDetections - 1 ; i > -1 ; --i){
+        struct Object* Detect = &ValidDetections[i];
+        DrawLabel(Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
+    }
+    
+}
+
+static void CreateDirectory(const char *directoryPath){
+    struct stat st;
+    // Check if directory exists
+    if (stat(directoryPath, &st) == -1) {
+        // Directory doesn't exist, create it
+        if (mkdir(directoryPath, 0777) != 0) {
+            printf("Failed to create %s.\n", directoryPath);
+            return;
+        }
+        printf("Directory %s created successfully.\n", directoryPath);
+    }
+}
+
+static void SavePosition(char* Directory, char* baseFileName, const int NumDetections, struct Object *Detections){
+
+    // int len = strlen(Directory);
+    // strcpy(cur_directory + len, baseFileName);
+    // strcpy(cur_directory + len + strlen(baseFileName), ".txt");
+    // printf("Cur_directory is : %s\n", cur_directory);
+
+    size_t directoryLen = strlen(Directory);
+    size_t fileNameLen = strlen(baseFileName);
+    if (directoryLen + fileNameLen + 5 > MAX_FILENAME_LENGTH) {
+        printf("File path is too long.\n");
+        return;
+    }
+    char cur_directory[MAX_FILENAME_LENGTH];
+    strcpy(cur_directory, Directory);
+
+    // Append the file name and extension to filePath
+    strcat(cur_directory, baseFileName);
+    strcat(cur_directory, ".txt");
+    FILE* fileptr;
+    fileptr = fopen( cur_directory, "w");
+
+     for (int i = 0; i < NumDetections ; i++) {
+        fprintf(fileptr, "%f %f %f %f %f %d\n", 
+                Detections[i].Rect.left, Detections[i].Rect.top, Detections[i].Rect.right, Detections[i].Rect.bottom, Detections[i].conf,
+                Detections[i].label);
+    }
+
+    fclose(fileptr);
+    printf("Write Positions into %s.\n", cur_directory);
+}
+
+static void SaveResultImage(char* Directory, char* baseFileName, IplImage* Img){
+    size_t directoryLen = strlen(Directory);
+    size_t fileNameLen = strlen(baseFileName);
+    if (directoryLen + fileNameLen + 5 > MAX_FILENAME_LENGTH) {
+        printf("File path is too long.\n");
+        return;
+    }
+    char cur_directory[MAX_FILENAME_LENGTH];
+    strcpy(cur_directory, Directory);
+
+    strcat(cur_directory, baseFileName);
+    strcat(cur_directory, ".jpg");
+    cvSaveImage(cur_directory, Img, 0);
+    printf("Save predicted image into %s.\n", cur_directory);
+}
+
+
+static void SaveMask(char* Directory, char* baseFileName, uint8_t (* OverLapMask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], int* HASMASKS, IplImage* Img){
+
+    size_t directoryLen = strlen(Directory);
+    size_t fileNameLen = strlen(baseFileName);
+    if (directoryLen + fileNameLen + 5 > MAX_FILENAME_LENGTH) {
+        printf("File path is too long.\n");
+        return;
+    }
+    char cur_directory[MAX_FILENAME_LENGTH];
+    strcpy(cur_directory, Directory);
+    strcat(cur_directory, baseFileName);
+    strcat(cur_directory, "/");
+    CreateDirectory(cur_directory);
+    size_t length = strlen(cur_directory);
+
+    printf("Current Directory Length %ld\n", length);
+    int mask_xyxy[4] = {0};
+    getMaskxyxy(mask_xyxy, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
+
+    for(int i = 0 ; i < NUM_MASKS ; ++i){
+        if(HASMASKS[i]){
+            char int2char[20];
+            // Convert integer to string
+            sprintf(int2char, "%d", i);
+            strcpy(cur_directory + length, int2char);
+           
+            strcpy(cur_directory + length + strlen(int2char), ".jpg");
+
+            IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
+            cvSetData(SrcMask, OverLapMask[i], SrcMask->widthStep);
+
+            // ROI Mask Region by using maskxyxy
+            CvRect roiRect = cvRect(mask_xyxy[0], mask_xyxy[1], mask_xyxy[2] - mask_xyxy[0], mask_xyxy[3] - mask_xyxy[1]); // (left, top, width, height)
+            cvSetImageROI(SrcMask, roiRect);
+            
+            // Obtain ROI image
+            IplImage* roiImg = cvCreateImage(cvSize(roiRect.width, roiRect.height), SrcMask->depth, 1);
+            cvCopy(SrcMask, roiImg, NULL);
+
+            // Obtain Resized Mask
+            IplImage* FinalMask = cvCreateImage(cvGetSize(Img), roiImg->depth, 1);
+            cvResize(roiImg, FinalMask, CV_INTER_LINEAR);
+
+
+            cvSaveImage(cur_directory, FinalMask, 0);
+            printf("Saved Mask at: %s\n", cur_directory);
+
+            cvReleaseImage(&SrcMask);
+            cvReleaseImage(&roiImg);
+            cvReleaseImage(&FinalMask);
+        }
+    }
+}
+
+void extractBaseName(const char *filepath, char *basename) {
+    // Find the position of the last '/'
+    const char *last_slash_position = strrchr(filepath, '/');
+    if (last_slash_position == NULL) {
+        // No '/' found, use the beginning of the filepath
+        last_slash_position = filepath;
+    } else {
+        // Move past the '/'
+        last_slash_position++;
+    }
+
+    // Find the position of the last '.'
+    const char *dot_position = strrchr(last_slash_position, '.');
+    if (dot_position == NULL) {
+        // No '.' found, use the end of the filepath
+        dot_position = filepath + strlen(filepath);
+    }
+
+    // Calculate the length of the substring between '/' and '.'
+    size_t length = dot_position - last_slash_position;
+
+    // Copy the substring between '/' and '.' to basename
+    strncpy(basename, last_slash_position, length);
+    basename[length] = '\0'; // Null-terminate the string
+}
+
 
 int main(int argc, const char **argv)
 {
@@ -327,9 +518,17 @@ int main(int argc, const char **argv)
     char NameBuffer[MAX_FILENAME_LENGTH];
 
     CvScalar TextColor = CV_RGB(255, 255, 255);
-    static uint8_t Mask[TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
+    static uint8_t Mask[MAX_DETECTIONS][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
+    static uint8_t OverLapMask[NUM_CLASSES][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
 
+    char ResultDirectory[MAX_FILENAME_LENGTH] = "./Results/";
+    char MaskDirectory[MAX_FILENAME_LENGTH] = "./Masks/";
+    char PositionDirectory[MAX_FILENAME_LENGTH]  = "./Positions/";
+    CreateDirectory(ResultDirectory);
+    CreateDirectory(MaskDirectory);
+    CreateDirectory(PositionDirectory);
 
+    int SAVEMASK = 0;
     // Open the file for reading
     ImageDataFile = fopen(argv[1], "r");
     if (ImageDataFile == NULL) {
@@ -339,14 +538,22 @@ int main(int argc, const char **argv)
     int ImageCount = 0;
     // Read the string from the file
     while (fgets(NameBuffer, sizeof(NameBuffer), ImageDataFile) != NULL) {
-        char FinalDirectory[MAX_FILENAME_LENGTH] = "./Results/result";
         NameBuffer[strcspn(NameBuffer, "\n")] = '\0';
 
+        char BaseName[MAX_FILENAME_LENGTH];
+        extractBaseName(NameBuffer, BaseName);
+        printf("Get BaseName %s\n", BaseName);
+
+        if(SAVEMASK){
+            memset( OverLapMask, 0, sizeof(uint8_t) * NUM_CLASSES * TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH);
+        }
+        
         IplImage* Img = cvLoadImage(NameBuffer, CV_LOAD_IMAGE_COLOR);
         if(!Img){
             printf("%s not found\n", NameBuffer);
-            return 0;
+            continue;
         }
+
         printf("===============Reading Image: %s ===============\n", NameBuffer);
         float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH];
         float Mask_Coeffs[MAX_DETECTIONS][NUM_MASKS];
@@ -354,20 +561,33 @@ int main(int argc, const char **argv)
         struct Object ValidDetections[MAX_DETECTIONS]; 
         int NumDetections = 0;
 
+        int HASMASKS[NUM_CLASSES] = {0};
         // Preprocessing + NMS 
-        PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, Mask_Coeffs, argv, ImageCount);
+        PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, Mask_Coeffs, argv, ImageCount, SAVEMASK);
 
         // Store Masks Results
-        PostProcessing(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor);
-
-
-        // Save Images
-        char* BaseName = strrchr(NameBuffer, '/');
-        if(BaseName != NULL){
-            BaseName++;
+        if(SAVEMASK){
+            PostProcessingSaveMask(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor, OverLapMask, HASMASKS);
+        }else{
+            PostProcessing(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor);
         }
-        strcat(FinalDirectory, BaseName);
-        cvSaveImage(FinalDirectory, Img, 0);
+        printf("============Drawing %d Mask and Labels Complete============\n", NumDetections);
+        // Save Images
+        
+        //strcat(FinalDirectory, BaseName);
+        //cvSaveImage(FinalDirectory, Img, 0)
+        printf("Base Name: %s\n", BaseName);
+
+       
+        if(SAVEMASK){
+            SaveMask( MaskDirectory, BaseName, OverLapMask, HASMASKS, Img);
+        }
+        
+        // If dot is found, truncate the string at that position
+        
+        //printf("Base without extension: %s\n",BaseNameWithoutExtension);
+        //SavePosition( PositionDirectory, BaseName, NumDetections, ValidDetections);
+        //SaveResultImage( ResultDirectory, BaseName, Img);
         cvReleaseImage(&Img);
         printf("===============Complete===============\n");
         printf("\n\n");
