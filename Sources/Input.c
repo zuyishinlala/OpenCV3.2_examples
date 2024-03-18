@@ -29,7 +29,6 @@ void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName, int Im
             }
         }
     }
-    fclose(file);
 }
 
 void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName, int ImageIndex) {
@@ -77,8 +76,7 @@ void initPredInput_pesudo(struct Pred_Input* input, float* mask_ptr, const char*
 }
 */
 void initPredInput(struct Pred_Input* input, float* mask_ptr, const char** argv, int ImageIndex){
-    printf("=====Reading Prediction Input...   =====\n");
-    
+    printf("Reading Prediction Input...\n");
     float* cls_ptr = &input->cls_pred[0][0];
     float* reg_ptr = &input->reg_pred[0][0];
     float* seg_ptr = &input->seg_pred[0][0];
