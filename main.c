@@ -241,10 +241,9 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     }
 
     if (classes != NULL)
-    { // to-do: only sort labels of these classes ( >= 1)
+    {   //to-do: only sort labels of these classes ( >= 1)
         //GetOnlyClass(classes, CountValidCandid, candidates);
     }
-    if(CountValidCandid > ROWSIZE) CountValidCandid = ROWSIZE;
 
     // Sort with confidence
     qsort_inplace(candidates, 0, CountValidCandid - 1);
@@ -375,7 +374,7 @@ static void CreateDirectory(const char *directoryPath){
     if (stat(directoryPath, &st) == -1) {
         // Directory doesn't exist, create it
         if (mkdir(directoryPath, 0777) != 0) {
-            printf("Failed to create %s.\n", directoryPath);
+            printf("Failed to create %s\n", directoryPath);
             return;
         }
         printf("Directory %s created successfully.\n", directoryPath);
@@ -437,21 +436,22 @@ static void SaveMask(char* Directory, char* baseFileName, uint8_t (* OverLapMask
     char cur_directory[MAX_FILENAME_LENGTH];
     strcpy(cur_directory, Directory);
     strcat(cur_directory, baseFileName);
-    strcat(cur_directory, "/");
-    CreateDirectory(cur_directory);
+    // strcat(cur_directory, "/");
+    //CreateDirectory(cur_directory);
     size_t length = strlen(cur_directory);
+    strcat(cur_directory, ".jpg");
 
     int mask_xyxy[4] = {0};
     getMaskxyxy(mask_xyxy, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
-
+    IplImage* OverLapImg = cvCreateImage(cvGetSize(Img), IPL_DEPTH_8U, 1);
+    cvZero(OverLapImg);
     for(int i = 0 ; i < NUM_MASKS ; ++i){
         if(HASMASKS[i]){
             char int2char[20];
             // Convert integer to string
-            sprintf(int2char, "%d", i);
-            strcpy(cur_directory + length, int2char);
-           
-            strcpy(cur_directory + length + strlen(int2char), ".jpg");
+            // sprintf(int2char, "%d", i);
+            // strcpy(cur_directory + length, int2char);
+            // strcpy(cur_directory + length + strlen(int2char), ".jpg");
 
             IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
             cvSetData(SrcMask, OverLapMask[i], SrcMask->widthStep);
@@ -468,14 +468,24 @@ static void SaveMask(char* Directory, char* baseFileName, uint8_t (* OverLapMask
             IplImage* FinalMask = cvCreateImage(cvGetSize(Img), roiImg->depth, 1);
             cvResize(roiImg, FinalMask, CV_INTER_LINEAR);
 
-            cvSaveImage(cur_directory, FinalMask, 0);
-            printf("Saved Mask at: %s\n", cur_directory);
+            //cvSaveImage(cur_directory, FinalMask, 0);
+            //printf("Saved Mask at: %s\n", cur_directory);
+            cvOr(OverLapImg, FinalMask, OverLapImg, NULL);
 
             cvReleaseImage(&SrcMask);
             cvReleaseImage(&roiImg);
             cvReleaseImage(&FinalMask);
         }
     }
+    // char overlap_directory[MAX_FILENAME_LENGTH];
+    // strcpy(overlap_directory, Directory);
+    // strcat(overlap_directory, "OverLapMask/");
+    // CreateDirectory(overlap_directory);
+    // strcat(overlap_directory, baseFileName);
+    // strcat(overlap_directory, ".jpg");
+    // printf("Save OverLap Image at %s\n", overlap_directory);
+    cvSaveImage(cur_directory, OverLapImg, 0);
+    cvReleaseImage(&OverLapImg);
 }
 
 void extractBaseName(const char *filepath, char *basename) {
@@ -489,10 +499,8 @@ void extractBaseName(const char *filepath, char *basename) {
         last_slash_position++;
     }
 
-    // Find the position of the last '.'
     const char *dot_position = strrchr(last_slash_position, '.');
     if (dot_position == NULL) {
-        // No '.' found, use the end of the filepath
         dot_position = filepath + strlen(filepath);
     }
 
@@ -516,20 +524,38 @@ int main(int argc, const char **argv)
     static uint8_t OverLapMask[NUM_CLASSES][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
 
     char ResultDirectory[MAX_FILENAME_LENGTH] = "./Results/";
-    char MaskDirectory[MAX_FILENAME_LENGTH] = "./Masks/";
-    char PositionDirectory[MAX_FILENAME_LENGTH]  = "./Positions/";
+    int ImageCount = 0;
+    
     CreateDirectory(ResultDirectory);
-    CreateDirectory(MaskDirectory);
-    CreateDirectory(PositionDirectory);
 
-    int SAVEMASK = 0;
+    char* PredictionDirectory = "./Prediction";
+
+    char* subMaskDirectory = "/Masks/";
+    char MaskDirectory[MAX_FILENAME_LENGTH];
+
+    char* subPositionDirectory = "/Position/";
+    char PositionDirectory[MAX_FILENAME_LENGTH];
+
+    if(SAVEMASK){  
+        CreateDirectory(PredictionDirectory);
+
+        strcpy(MaskDirectory, PredictionDirectory);
+        strcat(MaskDirectory, subMaskDirectory);          // ./Prediction/Masks/
+        CreateDirectory(MaskDirectory);
+
+        strcpy(PositionDirectory, PredictionDirectory);
+        strcat(PositionDirectory, subPositionDirectory);  // ./Prediction/Position/
+        CreateDirectory(PositionDirectory);
+    }
+    
+    // Open ImgData.txt that stores Image Directories
     ImageDataFile = fopen(argv[1], "r");
     if (ImageDataFile == NULL) {
         printf("Error opening file %s\n", argv[1]);
         return 0;
     }
-    int ImageCount = 0;
-    // Read the string from the file
+
+    // Read the string from a .txt File
     while (fgets(NameBuffer, sizeof(NameBuffer), ImageDataFile) != NULL) {
         NameBuffer[strcspn(NameBuffer, "\n")] = '\0';
         IplImage* Img = cvLoadImage(NameBuffer, CV_LOAD_IMAGE_COLOR);
@@ -572,10 +598,11 @@ int main(int argc, const char **argv)
         SaveResultImage( ResultDirectory, BaseName, Img);
 
         cvReleaseImage(&Img);
-        printf("===============All Complete===============\n");
+        printf("===============Saved Image Complete===============\n");
         printf("\n\n");
         ++ImageCount;
     }
+    printf("All Images are read\n");
     // Close the file
     fclose(ImageDataFile);
 

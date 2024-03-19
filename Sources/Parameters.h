@@ -31,6 +31,7 @@
 #define MULTI_LABEL 0
 #define ISSOLO 0
 #define ANCHOR_BASED 0
+#define SAVEMASK 1
 
 // OpenCV parameters for drawing
 #define MASK_TRANSPARENCY 0.8f // 0 to 1
