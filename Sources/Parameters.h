@@ -24,15 +24,15 @@
 #define CONF_THRESHOLD 0.25f
 #define NMS_THRESHOLD 0.45f
 
-#define MAX_FILENAME_LENGTH 80
+#define MAX_FILENAME_LENGTH 256
 
 // Bool
-#define AGNOSTIC 1
-#define MULTI_LABEL 0
-//#define ISSOLO 0
-#define SAVEMASK 0
+#define AGNOSTIC 0     // True: we do class-independent nms.   False: different class would do nms respectively.
+#define MULTI_LABEL 0  // True: one box can have multi labels. False: one box only have one label.
+#define SAVEMASK 0     // Save Mask & positions & results, otherwise only save results
 
 // OpenCV parameters for drawing
 #define MASK_TRANSPARENCY 0.8f // 0 to 1
+#define READIMAGE_LIMIT 10
 
 #endif

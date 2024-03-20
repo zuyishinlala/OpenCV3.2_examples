@@ -222,7 +222,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
 
     int shift_num = nextPowerOf2(ROWSIZE);
     int bitwise_num = (1 << shift_num) - 1;
-    
+
     if(AGNOSTIC)
     {
         for (int row_index = 0; row_index < ROWSIZE; ++row_index)
@@ -264,6 +264,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
                                     input->reg_pred[row_index][1] + enlarge_factor,
                                     input->reg_pred[row_index][2] + enlarge_factor, 
                                     input->reg_pred[row_index][3] + enlarge_factor};
+
                     // Temporary obj
                     struct Object obj = {box, row_index, max_clsprob[row_index], &(input->seg_pred[row_index][0])};
                     candidates[CountValidCandid++] = obj;
@@ -308,16 +309,6 @@ static void CopyMaskCoeffs(float (*DstCoeffs)[NUM_MASKS], const int NumDetection
     }
 }
 
-static void print_data(float *data,int colsize, int size){
-    for(int i = 0 ; i < size ; ++i){
-        for(int c = 0 ; c < 4 ; ++c){
-            printf("%f, ", *(data + i*colsize + c));
-        }
-        printf("\n");
-    }
-    printf("\n");
-}
-
 static inline void PrintObjectData(int NumDetections, struct Object* ValidDetections){
     for(int i = 0 ; i < NumDetections ; ++i){
         printf("======Index: %d======\n", i);
@@ -349,8 +340,6 @@ static inline void PreProcessing(float* Mask_Input, int* NumDetections, struct O
     //PrintObjectData(*NumDetections, ValidDetections);
 }
 
-
-
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
 static inline void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], IplImage* Img, uint8_t(* Mask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], CvScalar TextColor){
     printf("Drawing Labels and Segments...\n");
@@ -374,9 +363,8 @@ static inline void PostProcessing(const int NumDetections, struct Object *ValidD
     }
 }
 
-
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
-static inline void PostProcessingSaveMask(const int NumDetections, struct Object *ValidDetections, const float Mask_Input[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH],
+static inline void PostProcessingSaveMask(const int NumDetections, struct Object *ValidDetections, const float (* Mask_Input)[MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH],
                                           IplImage* Img, uint8_t(* Mask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], CvScalar TextColor,
                                         uint8_t(* OverLapMask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], int* HASMASKS){
     printf("Drawing Labels and Segments...\n");
@@ -474,7 +462,6 @@ static void SaveResultImage(char* Directory, char* baseFileName, IplImage* Img){
     printf("Save predicted image into %s.\n", cur_directory);
 }
 
-
 static void SaveMask(char* Directory, char* baseFileName, uint8_t (* OverLapMask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], int* HASMASKS, IplImage* Img){
 
     size_t directoryLen = strlen(Directory);
@@ -538,7 +525,7 @@ static void SaveMask(char* Directory, char* baseFileName, uint8_t (* OverLapMask
     cvReleaseImage(&OverLapImg);
 }
 
-void extractBaseName(const char *filepath, char *basename) {
+static void extractBaseName(const char *filepath, char *basename) {
     // Find the position of the last '/'
     const char *last_slash_position = strrchr(filepath, '/');
     if (last_slash_position == NULL) {
@@ -562,6 +549,11 @@ void extractBaseName(const char *filepath, char *basename) {
     basename[length] = '\0'; // Null-terminate the string
 }
 
+static void AppendandCreateDirectory(char* directory, char* foldername, char* ResultDirectory){
+    strcpy(ResultDirectory, directory);
+    strcat(ResultDirectory, foldername);
+    CreateDirectory(ResultDirectory); 
+}
 
 int main(int argc, const char **argv)
 {
@@ -569,7 +561,6 @@ int main(int argc, const char **argv)
     FILE *ImageDataFile;
     char NameBuffer[MAX_FILENAME_LENGTH];
     int ImageCount = 0;
-
     CvScalar TextColor = CV_RGB(255, 255, 255);
     static uint8_t Mask[MAX_DETECTIONS][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
     static uint8_t OverLapMask[NUM_CLASSES][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
@@ -578,10 +569,8 @@ int main(int argc, const char **argv)
     CreateDirectory(PredictionDirectory);
 
     char* subResultDirectory = "/Results/";
-    char ResultDirectory[MAX_FILENAME_LENGTH];   
-    strcpy(ResultDirectory, PredictionDirectory);
-    strcat(ResultDirectory, subResultDirectory);          // ./Prediction/Masks/
-    CreateDirectory(ResultDirectory); 
+    char ResultDirectory[MAX_FILENAME_LENGTH];        
+    AppendandCreateDirectory(PredictionDirectory, subResultDirectory, ResultDirectory);
 
     char* subMaskDirectory = "/Masks/";
     char MaskDirectory[MAX_FILENAME_LENGTH];
@@ -590,14 +579,8 @@ int main(int argc, const char **argv)
     char PositionDirectory[MAX_FILENAME_LENGTH];
 
     if(SAVEMASK){
-
-        strcpy(MaskDirectory, PredictionDirectory);
-        strcat(MaskDirectory, subMaskDirectory);          // ./Prediction/Masks/
-        CreateDirectory(MaskDirectory);
-
-        strcpy(PositionDirectory, PredictionDirectory);
-        strcat(PositionDirectory, subPositionDirectory);  // ./Prediction/Position/
-        CreateDirectory(PositionDirectory);
+        AppendandCreateDirectory(PredictionDirectory, subMaskDirectory, MaskDirectory);
+        AppendandCreateDirectory(PredictionDirectory, subPositionDirectory, PositionDirectory);
     }
     
     // Open ImgData.txt that stores Image Directories
@@ -608,7 +591,7 @@ int main(int argc, const char **argv)
     }
 
     // Read the string from a .txt File
-    while (fgets(NameBuffer, sizeof(NameBuffer), ImageDataFile) != NULL) {
+    while (fgets(NameBuffer, sizeof(NameBuffer), ImageDataFile) != NULL && ImageCount < READIMAGE_LIMIT) {
         NameBuffer[strcspn(NameBuffer, "\n")] = '\0';
         IplImage* Img = cvLoadImage(NameBuffer, CV_LOAD_IMAGE_COLOR);
         if(!Img){
