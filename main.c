@@ -138,17 +138,6 @@ static void qsort_inplace(struct Object *Objects, int left, int right)
 }
 
 // ========================================
-// Calculate intersection area -- xywh
-// ========================================
-/*
-static float intersection_area(const struct Bbox a, const struct Bbox b) {
-    float x_overlap = fmax(0, fmin(a.x + a.height / 2, b.x + b.height / 2) - fmax(a.x - a.height / 2, b.x - b.height / 2));
-    float y_overlap = fmax(0, fmin(a.y + a.width / 2, b.y + b.width / 2) - fmax(a.y - a.width / 2, b.y - b.width / 2));
-    return x_overlap * y_overlap;
-}
-*/
-
-// ========================================
 // Calculate intersection area -- xyxy(left, top, bottom, right)
 // ========================================
 static float intersection_area(struct Bbox box1, struct Bbox box2) {
@@ -206,6 +195,13 @@ static void GetOnlyClass(char* className, int *Candid, struct Object* candidates
     *Candid = ValidCandid;
 }
 */
+static int nextPowerOf2(int n) {
+    int exponent = 0;
+    while ((1 << exponent) <= n) {
+        exponent++;
+    }
+    return exponent;
+}
 
 // Perform Sorting + NMS
 static void non_max_suppression_seg(struct Pred_Input *input, char *classes, struct Object *picked_objects, int* CountValidDetect, float conf_threshold)
@@ -215,31 +211,70 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     int max_class_index[ROWSIZE] = {0};
     max_classpred(input->cls_pred, max_clsprob, max_class_index);
 
-    struct Object candidates[ROWSIZE];
-    // Count good Bboxes
-    int CountValidCandid = 0;
-
-    for (int row_index = 0; row_index < ROWSIZE; ++row_index)
-    {
-        if (max_clsprob[row_index] > conf_threshold)
-        {
-            struct Bbox box = {input->reg_pred[row_index][0], input->reg_pred[row_index][1], input->reg_pred[row_index][2], input->reg_pred[row_index][3]};
-            // init an Object
-            struct Object obj = {box, max_class_index[row_index], max_clsprob[row_index], &(input->seg_pred[row_index][0])};
-            candidates[CountValidCandid++] = obj;
-        }
-    }
-
-    printf("Found %d candidates...\n", CountValidCandid);
+    struct Object candidates[ROWSIZE * NUM_CLASSES];
     int max_wh = 4096;        // maximum box width and height
     int max_nms = 30000;      // maximum number of boxes put into torchvision.ops.nms()
     float time_limit = 10.0f; // quit the function when nms cost time exceed the limit time.
     // multi_label &= NUM_CLASSES > 1;   // multiple labels per box
+    
+    // Count good Bboxes
+    int CountValidCandid = 0;
 
-    if (MULTI_LABEL)
-    { // to-do
+    int shift_num = nextPowerOf2(ROWSIZE);
+    int bitwise_num = (1 << shift_num) - 1;
+    
+    if(AGNOSTIC)
+    {
+        for (int row_index = 0; row_index < ROWSIZE; ++row_index)
+        {
+            if (max_clsprob[row_index] > conf_threshold)
+            {
+                struct Bbox box = {input->reg_pred[row_index][0], input->reg_pred[row_index][1], input->reg_pred[row_index][2], input->reg_pred[row_index][3]};
+                // init an Object
+                struct Object obj = {box, max_class_index[row_index], max_clsprob[row_index], &(input->seg_pred[row_index][0])};
+                candidates[CountValidCandid++] = obj;
+            }
+        }
+    }else{
+        if(MULTI_LABEL){
+            for (int row_index = 0; row_index < ROWSIZE; ++row_index)
+            {
+                for(int class = 0 ; class < NUM_CLASSES ; ++class){
+                    if(input->cls_pred[row_index][class] > conf_threshold){
+                        float enlarge_factor = class * max_wh;
+                        struct Bbox box = {input->reg_pred[row_index][0] + enlarge_factor, 
+                                        input->reg_pred[row_index][1] + enlarge_factor,
+                                        input->reg_pred[row_index][2] + enlarge_factor, 
+                                        input->reg_pred[row_index][3] + enlarge_factor};
+
+                        int new_row_index = row_index | (class << shift_num);
+                        // Temporary obj
+                        struct Object obj = {box, new_row_index, max_clsprob[row_index], &(input->seg_pred[row_index][0])};
+                        candidates[CountValidCandid++] = obj;
+                    }
+                }
+            }
+        }else{
+            for (int row_index = 0; row_index < ROWSIZE; ++row_index)
+            {
+                if (max_clsprob[row_index] > conf_threshold)
+                {
+                    float enlarge_factor = max_class_index[row_index] * max_wh;
+                    struct Bbox box = {input->reg_pred[row_index][0] + enlarge_factor, 
+                                    input->reg_pred[row_index][1] + enlarge_factor,
+                                    input->reg_pred[row_index][2] + enlarge_factor, 
+                                    input->reg_pred[row_index][3] + enlarge_factor};
+                    // Temporary obj
+                    struct Object obj = {box, row_index, max_clsprob[row_index], &(input->seg_pred[row_index][0])};
+                    candidates[CountValidCandid++] = obj;
+                }
+            }
+        }
     }
+    
+    printf("Found %d candidates...\n", CountValidCandid);
 
+    
     if (classes != NULL)
     {   //to-do: only sort labels of these classes ( >= 1)
         //GetOnlyClass(classes, CountValidCandid, candidates);
@@ -247,7 +282,22 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
 
     // Sort with confidence
     qsort_inplace(candidates, 0, CountValidCandid - 1);
+    if(CountValidCandid > max_nms) CountValidCandid = max_nms;
     nms_sorted_bboxes(candidates, CountValidCandid, picked_objects, CountValidDetect);
+
+    if(!AGNOSTIC){
+        for(int i = 0 ; i < *CountValidDetect ; ++i){
+            int row_index = picked_objects[i].label;
+            int real_class = max_class_index[row_index];
+            if(MULTI_LABEL){
+                real_class = row_index >> shift_num;
+                row_index = row_index & bitwise_num;
+            }
+            struct Bbox real_box = {input->reg_pred[row_index][0], input->reg_pred[row_index][1], input->reg_pred[row_index][2], input->reg_pred[row_index][3]};
+            picked_objects[i].label = real_class;
+            picked_objects[i].Rect = real_box;
+        }
+    }
     return;
 }
 
@@ -518,17 +568,20 @@ int main(int argc, const char **argv)
 
     FILE *ImageDataFile;
     char NameBuffer[MAX_FILENAME_LENGTH];
+    int ImageCount = 0;
 
     CvScalar TextColor = CV_RGB(255, 255, 255);
     static uint8_t Mask[MAX_DETECTIONS][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
     static uint8_t OverLapMask[NUM_CLASSES][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
 
-    char ResultDirectory[MAX_FILENAME_LENGTH] = "./Results/";
-    int ImageCount = 0;
-    
-    CreateDirectory(ResultDirectory);
-
     char* PredictionDirectory = "./Prediction";
+    CreateDirectory(PredictionDirectory);
+
+    char* subResultDirectory = "/Results/";
+    char ResultDirectory[MAX_FILENAME_LENGTH];   
+    strcpy(ResultDirectory, PredictionDirectory);
+    strcat(ResultDirectory, subResultDirectory);          // ./Prediction/Masks/
+    CreateDirectory(ResultDirectory); 
 
     char* subMaskDirectory = "/Masks/";
     char MaskDirectory[MAX_FILENAME_LENGTH];
@@ -536,8 +589,7 @@ int main(int argc, const char **argv)
     char* subPositionDirectory = "/Position/";
     char PositionDirectory[MAX_FILENAME_LENGTH];
 
-    if(SAVEMASK){  
-        CreateDirectory(PredictionDirectory);
+    if(SAVEMASK){
 
         strcpy(MaskDirectory, PredictionDirectory);
         strcat(MaskDirectory, subMaskDirectory);          // ./Prediction/Masks/

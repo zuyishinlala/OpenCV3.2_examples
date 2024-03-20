@@ -20,18 +20,17 @@
 
 #define ROWSIZE HEIGHT0*WIDTH0 + HEIGHT1*WIDTH1 + HEIGHT2*WIDTH2
 
-#define MAX_DETECTIONS 30
+#define MAX_DETECTIONS 50
 #define CONF_THRESHOLD 0.25f
 #define NMS_THRESHOLD 0.45f
 
 #define MAX_FILENAME_LENGTH 80
 
 // Bool
-#define AGNOSTIC 0
+#define AGNOSTIC 1
 #define MULTI_LABEL 0
-#define ISSOLO 0
-#define ANCHOR_BASED 0
-#define SAVEMASK 1
+//#define ISSOLO 0
+#define SAVEMASK 0
 
 // OpenCV parameters for drawing
 #define MASK_TRANSPARENCY 0.8f // 0 to 1
