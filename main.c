@@ -599,7 +599,7 @@ int main(int argc, const char **argv)
             continue;
         }
 
-        if(SAVEMASK){
+        if(DRAWPERMASK){
             memset( OverLapMask, 0, sizeof(uint8_t) * NUM_CLASSES * TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH);
         }
         
@@ -616,7 +616,7 @@ int main(int argc, const char **argv)
         PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, Mask_Coeffs, argv, ImageCount);
 
         // Store Masks Results
-        if(SAVEMASK){
+        if(DRAWPERMASK){
             PostProcessingSaveMask(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor, OverLapMask, HASMASKS);
         }else{
             PostProcessing(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor);
@@ -647,6 +647,6 @@ int main(int argc, const char **argv)
 ================================================================================================================================================================
 Type:
 gcc main.c -o T ./Sources/Input.c ./Sources/Bbox.c  `pkg-config --cflags --libs opencv` -lm
-./T ./ImgData.txt ./outputs/cls_preds8.txt ./outputs/cls_preds16.txt ./outputs/cls_preds32.txt ./outputs/reg_preds8.txt ./outputs/reg_preds16.txt ./outputs/reg_preds32.txt ./outputs/seg_preds8.txt ./outputs/seg_preds16.txt ./outputs/seg_preds32.txt ./outputs/mask_input.txt
+time ./T ./ImgData.txt ./outputs/cls_preds8.txt ./outputs/cls_preds16.txt ./outputs/cls_preds32.txt ./outputs/reg_preds8.txt ./outputs/reg_preds16.txt ./outputs/reg_preds32.txt ./outputs/seg_preds8.txt ./outputs/seg_preds16.txt ./outputs/seg_preds32.txt ./outputs/mask_input.txt
 ================================================================================================================================================================
 */

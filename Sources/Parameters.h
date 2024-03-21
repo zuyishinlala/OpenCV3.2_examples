@@ -30,9 +30,10 @@
 #define AGNOSTIC 0     // True: we do class-independent nms.   False: different class would do nms respectively.
 #define MULTI_LABEL 0  // True: one box can have multi labels. False: one box only have one label.
 #define SAVEMASK 0     // Save Mask & positions & results, otherwise only save results
+#define DRAWPERMASK 0  // Draw Per Mask
 
 // OpenCV parameters for drawing
 #define MASK_TRANSPARENCY 0.8f // 0 to 1
-#define READIMAGE_LIMIT 10
+#define READIMAGE_LIMIT 4
 
 #endif
