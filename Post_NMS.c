@@ -29,9 +29,19 @@ static unsigned int hex_colors[20] = {0xFF3838, 0xFF9D97, 0xFF701F, 0xFFB21D, 0x
 
 static void sigmoid(int rowsize, int colsize, float *ptr)
 {
+    /*
     for (int i = 0; i < rowsize * colsize ; ++i, ++ptr)
     {
-        *ptr = 1.0f / (1.0f + powf(2.71828182846, -*ptr));
+        *ptr = 1.0f / (1.0f + expf(-*ptr));
+    }
+    */
+    
+    #pragma omp parallel for collapse(2)
+    for (int i = 0; i < rowsize; ++i) {
+        for (int j = 0; j < colsize ; ++j) {
+            int index = i * colsize + j;
+            ptr[index] = 1.0f / (1.0f + expf(-ptr[index]));
+        }
     }
 }
 
@@ -44,48 +54,9 @@ static inline void getMaskxyxy(int* xyxy, float org_size_w, float org_size_h, fl
     xyxy[3] = org_size_h - padding_h; // bottom
     return;
 }
-/*
-static float GetPixel(int x, int y, int width, int height, float *Src){
-    if(x < 0 || x >= width || y < 0 || y >= height) return 0.f;
-    return *(Src + y*width + x);
-}
-
-//Align Corner = False
-static void BilinearInterpolate(float *Src, uint8_t *Tar, float Threshold, struct Bbox Bound){
-
-    float src_width = MASK_SIZE_WIDTH, src_height = MASK_SIZE_HEIGHT;
-    float tar_width = TRAINED_SIZE_WIDTH, tar_height = TRAINED_SIZE_HEIGHT;
-
-    float r_ratio = src_height / tar_height;
-    float c_ratio = src_width / tar_width;
-
-    clamp(&Bound, tar_width, tar_height);
-    printf("%f, %f, %f, %f\n", Bound.left, Bound.right, Bound.top, Bound.bottom);
-
-    // Perform Binary Threshold only in the Bounding Box Region
-    for(int r = (int)Bound.top ; r < (int)Bound.bottom ; ++r){
-        for(int c = (int)Bound.left ; c < (int)Bound.right ; ++c){
-            float PixelSum = 0.f;
-            
-            float dr = ((float)r + 0.5f) * r_ratio - 0.5f;
-            float dc = ((float)c + 0.5f) * c_ratio - 0.5f;
-            float ir = floorf(dr), ic = floorf(dc);
-
-            dr = (dr < 0.f) ? 1.0f : ((dr > src_height - 1.0f) ? 0.f : dr - ir);
-            dc = (dc < 0.f) ? 1.0f : ((dc > src_width - 1.0f) ? 0.f : dc - ic);
-
-            PixelSum =     dc *  dr * GetPixel(ic + 1, ir + 1, src_height, src_width, Src) + 
-                     (1 - dc) *  dr * GetPixel(ic    , ir + 1, src_height, src_width, Src) +
-                      dc * (1 - dr) * GetPixel(ic + 1, ir    , src_height, src_width, Src) +
-                (1 - dc) * (1 - dr) * GetPixel(ic    , ir    , src_height, src_width, Src);
-            *(Tar + r * TRAINED_SIZE_WIDTH + c) = (PixelSum > Threshold) ? 255 : 0;
-        }
-    }
-}
-*/
 
 // Obtain Uncropped Mask
-static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH], uint8_t* UncroppedMask)
+static void handle_proto_test(struct Object* obj, const float (*masks)[NUM_MASKS], uint8_t* UncroppedMask)
 {
     // Resize mask & Obtain Binary Mask
     // Matrix Multiplication
@@ -95,12 +66,25 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
     float Binary_Thres = 0.45f;
     float pred_mask[MASK_SIZE_WIDTH * MASK_SIZE_HEIGHT] = {0};
     
+    /*
     for(int i = 0 ; i < MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH ; ++i){
         float Pixel = 0.f;
         for(int c = 0 ; c < NUM_MASKS ; ++c){
-            Pixel += maskcoeffs[c] * masks[c][i];
+            Pixel += maskcoeffs[c] * masks[i][c];
         }
         pred_mask[i] = Pixel;
+    }
+    */
+    
+    #pragma omp parallel for collapse(2)
+    for (int i = 0; i < MASK_SIZE_HEIGHT; ++i) {
+        for (int j = 0; j < MASK_SIZE_WIDTH; ++j) {
+            float Pixel = 0.f;
+            for (int c = 0; c < NUM_MASKS; ++c) {
+                Pixel += maskcoeffs[c] * masks[i * MASK_SIZE_WIDTH + j][c];
+            }
+            pred_mask[i * MASK_SIZE_WIDTH + j] = Pixel;
+        }
     }
     
     sigmoid(MASK_SIZE_HEIGHT, MASK_SIZE_WIDTH, pred_mask);
@@ -128,19 +112,10 @@ static void handle_proto_test(struct Object* obj, const float masks[NUM_MASKS][M
 
     memcpy(UncroppedMask, SrcMask_uint8->imageData, sizeof(uint8_t) * TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT);
 
-    // cvNamedWindow("Pred_Mask", CV_WINDOW_AUTOSIZE);
-    // cvShowImage("Pred_Mask", SrcMask_uint8);
-    // cvWaitKey(0);
-    // cvDestroyWindow("Pred_Mask");
-
     cvReleaseImage(&SrcMask);
     cvReleaseImage(&SrcMask_Resized);
     cvReleaseImage(&ZeroMask);
     cvReleaseImage(&SrcMask_uint8);
-
-    // Bilinear Interpolate + Binary Threshold 
-    // Obtain Uncropped Mask (size 640 * 640)
-    //BilinearInterpolate(pred_mask, UncroppedMask, Binary_Thres, box);
 }
 
 // Rescale Bbox: Bounding Box positions to Real place

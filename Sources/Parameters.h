@@ -27,13 +27,13 @@
 #define MAX_FILENAME_LENGTH 256
 
 // Bool
-#define AGNOSTIC 0     // True: we do class-independent nms.   False: different class would do nms respectively.
-#define MULTI_LABEL 0  // True: one box can have multi labels. False: one box only have one label.
-#define SAVEMASK 0     // Save Mask & positions & results, otherwise only save results
-#define DRAWPERMASK 0  // Draw Per Mask
+#define AGNOSTIC 1     // True: All detections do nms toegether  False: different class would do nms respectively
+#define MULTI_LABEL 0  // True: 1 anchor box can have > 1 labels False: one box only have one label.
+#define SAVEMASK 0     // True: Save Mask & positions & results  False: only save results
+#define DRAWPERMASK 0  // True: Draw per Mask                    False: Draw per detection
 
 // OpenCV parameters for drawing
 #define MASK_TRANSPARENCY 0.8f // 0 to 1
-#define READIMAGE_LIMIT 4
+#define READIMAGE_LIMIT 1
 
 #endif

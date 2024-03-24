@@ -2,15 +2,15 @@
 
 void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName, int ImageIndex){
     FILE *file = fopen( FileName, "r");
-
     if (file == NULL) {
         printf("Error opening file %s\n", FileName);
         return;
     }
+
     for(int i = 0 ; i < ImageIndex ; ++i){
         for(int c = 0 ; c < ColSize ; ++c){
             for(int r = 0 ; r < RowSize ; ++r){
-                float num ;
+                float num;
                 if (fscanf( file, "%f", &num) != 1) {
                     printf("Error reading from file %s\n", FileName);
                     return;
@@ -29,6 +29,7 @@ void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName, int Im
             }
         }
     }
+    fclose(file);
 }
 
 void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName, int ImageIndex) {
@@ -52,8 +53,8 @@ void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName, 
     }
     
     for (int i = 0; i < RowSize; i++) {
-        for (int j = 0; j < ColSize; j++) {
-            if (fscanf(file, "%f", mask + i*ColSize + j) != 1) {
+        for (int j = 0; j < ColSize; j++, mask++) {
+            if (fscanf(file, "%f", mask) != 1) {
                 printf("Error reading from file %s\n", FileName);
                 fclose(file);
                 return;
@@ -108,7 +109,8 @@ void initPredInput(struct Pred_Input* input, float* mask_ptr, const char** argv,
     seg_ptr += WIDTH1*HEIGHT1*NUM_MASKS;
     ReadFile(seg_ptr, WIDTH2*HEIGHT2, NUM_MASKS, argv[10], ImageIndex);
 
-    ReadMaskInput(mask_ptr, NUM_MASKS, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, argv[11], ImageIndex);
+    //ReadMaskInput(mask_ptr, NUM_MASKS, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, argv[11], ImageIndex);
+    ReadFile(mask_ptr, MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH, NUM_MASKS, argv[11], ImageIndex);
 }
 
 /*
