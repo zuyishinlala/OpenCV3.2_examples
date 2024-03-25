@@ -1,6 +1,6 @@
 #include "Input.h"
 
-void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName, int ImageIndex){
+static void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName, int ImageIndex){
     FILE *file = fopen( FileName, "r");
     if (file == NULL) {
         printf("Error opening file %s\n", FileName);
@@ -32,7 +32,7 @@ void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName, int Im
     fclose(file);
 }
 
-void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName, int ImageIndex) {
+static void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName, int ImageIndex) {
     FILE *file = fopen(FileName, "r");
 
     if (file == NULL) {

@@ -27,15 +27,8 @@ static char* names[] = {
 static unsigned int hex_colors[20] = {0xFF3838, 0xFF9D97, 0xFF701F, 0xFFB21D, 0xCFD231, 0x48F90A, 0x92CC17, 0x3DDB86, 0x1A9334, 0x00D4BB,
                                           0x2C99A8, 0x00C2FF, 0x344593, 0x6473FF, 0x0018EC, 0x8438FF, 0x520085, 0xCB38FF, 0xFF95C8, 0xFF37C7};
 
-static void sigmoid(int rowsize, int colsize, float *ptr)
+static inline void sigmoid(int rowsize, int colsize, float *ptr)
 {
-    /*
-    for (int i = 0; i < rowsize * colsize ; ++i, ++ptr)
-    {
-        *ptr = 1.0f / (1.0f + expf(-*ptr));
-    }
-    */
-    
     #pragma omp parallel for collapse(2)
     for (int i = 0; i < rowsize; ++i) {
         for (int j = 0; j < colsize ; ++j) {
@@ -65,16 +58,6 @@ static void handle_proto_test(struct Object* obj, const float (*masks)[NUM_MASKS
 
     float Binary_Thres = 0.45f;
     float pred_mask[MASK_SIZE_WIDTH * MASK_SIZE_HEIGHT] = {0};
-    
-    /*
-    for(int i = 0 ; i < MASK_SIZE_HEIGHT*MASK_SIZE_WIDTH ; ++i){
-        float Pixel = 0.f;
-        for(int c = 0 ; c < NUM_MASKS ; ++c){
-            Pixel += maskcoeffs[c] * masks[i][c];
-        }
-        pred_mask[i] = Pixel;
-    }
-    */
     
     #pragma omp parallel for collapse(2)
     for (int i = 0; i < MASK_SIZE_HEIGHT; ++i) {
@@ -192,8 +175,7 @@ static void DrawLabel(const struct Bbox box, const float conf, const int ClassLa
     cvPutText(ImgSrc, FinalLabel, cvPoint(left, top - baseLine), &font, TextColor);
 }
 
-static void RescaleMaskandDrawMask(const int Label, uint8_t* UnCropedMask, IplImage* ImgSrc, int* mask_xyxy){
-
+static void RescaleMask(IplImage** Dst, uint8_t* UnCropedMask, IplImage* ImgSrc, int* mask_xyxy) {
     // uint8_t array to IplImage
     IplImage* SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);   
     cvSetData(SrcMask, UnCropedMask, SrcMask->widthStep);
@@ -207,13 +189,19 @@ static void RescaleMaskandDrawMask(const int Label, uint8_t* UnCropedMask, IplIm
     cvCopy(SrcMask, roiImg, NULL);
 
     // Obtain Resized Mask
-    IplImage* FinalMask = cvCreateImage(cvGetSize(ImgSrc), roiImg->depth, 1);
-    cvResize(roiImg, FinalMask, CV_INTER_LINEAR);
+    *Dst = cvCreateImage(cvGetSize(ImgSrc), SrcMask->depth, 1);
+    cvResize(roiImg, *Dst, CV_INTER_LINEAR);
 
+    /*
+    cvNamedWindow("Resized Mask", CV_WINDOW_AUTOSIZE);
+    cvShowImage("Resized Mask", *Dst);
+
+    cvWaitKey(0);
+    cvDestroyAllWindows();
+    */
     // Draw Label and Task (int label to string)
-    DrawMask(Label, MASK_TRANSPARENCY, FinalMask, ImgSrc);
+    //DrawMask(Label, MASK_TRANSPARENCY, FinalMask, ImgSrc);
 
-    cvReleaseImage(&SrcMask);
+    cvReleaseImageHeader(&SrcMask);
     cvReleaseImage(&roiImg);
-    cvReleaseImage(&FinalMask);
 }

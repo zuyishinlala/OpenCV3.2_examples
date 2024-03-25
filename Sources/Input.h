@@ -12,6 +12,6 @@ struct Pred_Input{
 
 void initPredInput(struct Pred_Input* input, float* mask_ptr, const char** argv, int ImgIndex);
 //void initPredInput_pesudo(struct Pred_Input* input, float* mask_ptr, const char** argv);
-void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName, int ImgIndex);
-void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName,int ImgIndex);
-#endif // OBJECTS_H
+static void ReadMaskInput(float* mask, int RowSize, int ColSize, const char *FileName, int ImgIndex);
+static void ReadFile(float* Dst, int RowSize, int ColSize, const char* FileName,int ImgIndex);
+#endif 

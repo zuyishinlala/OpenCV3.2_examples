@@ -4,6 +4,9 @@
 #define NUM_CLASSES 80
 #define NUM_MASKS 32
 
+
+#define ORG_IMAGE_SIZE 1920 * 1080
+
 #define TRAINED_SIZE_HEIGHT 384
 #define TRAINED_SIZE_WIDTH 640
 
@@ -27,10 +30,10 @@
 #define MAX_FILENAME_LENGTH 256
 
 // Bool
-#define AGNOSTIC 1     // True: All detections do nms toegether  False: different class would do nms respectively
+#define AGNOSTIC 0     // True: All detections do nms toegether  False: different class would do nms respectively
 #define MULTI_LABEL 0  // True: 1 anchor box can have > 1 labels False: one box only have one label.
-#define SAVEMASK 0     // True: Save Mask & positions & results  False: only save results
-#define DRAWPERMASK 0  // True: Draw per Mask                    False: Draw per detection
+#define SAVEMASK 0    // True: Save Mask & positions & results  False: only save results
+//#define DRAWPERMASK 0  // True: Draw per Mask                    False: Draw per detection
 
 // OpenCV parameters for drawing
 #define MASK_TRANSPARENCY 0.8f // 0 to 1

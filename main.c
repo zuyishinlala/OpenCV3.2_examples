@@ -1,19 +1,18 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <opencv/cv.h>
-#include <opencv/cxcore.h>
-#include <opencv2/imgcodecs/imgcodecs_c.h>
-#include <opencv/highgui.h>
-
 #include "./Sources/Object.h"
-#include "./Sources/Parameters.h"
 #include "./Sources/Input.h"
+#include "./Sources/Output.h"
 #include "./Sources/Bbox.h"
+#include "./Sources/Parameters.h"
+
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#include <time.h>
 
 #include "Post_NMS.c"
 
@@ -27,7 +26,7 @@ static void post_regpreds(float (*distance)[4], char *type)
 
         int end_row_index = row_bound * col_bound;
 
-        #pragma omp parallel for collapse(2)
+        #pragma omp parallel for collapse(2) schedule(dynamic)
         for (int anchor_points_y = 0 ; anchor_points_y < row_bound ; ++anchor_points_y)
         {
             for (int anchor_points_x = 0 ; anchor_points_x < col_bound ; ++anchor_points_x)
@@ -36,20 +35,20 @@ static void post_regpreds(float (*distance)[4], char *type)
                 float *data = &distance[row][0]; // left, top, right, bottom
 
                 // x1y1 = anchor_points - lt
-                data[0] = (float)anchor_points_x - data[0];
-                data[1] = (float)anchor_points_y - data[1];
+                data[0] = anchor_points_x - data[0];
+                data[1] = anchor_points_y - data[1];
 
                 // x2y2 = anchor_points + rb
-                data[2] += (float)anchor_points_x; // anchor_points_c + data[2]
-                data[3] += (float)anchor_points_y; // anchor_points_r + data[3]
+                data[2] += anchor_points_x; // anchor_points_c + data[2]
+                data[3] += anchor_points_y; // anchor_points_r + data[3]
 
                 for (int j = 0 ; j < 4 ; ++j){
-                    distance[row][j] += 0.5f;
-                    distance[row][j] *= stride;
+                    distance[row][j] = (distance[row][j] + 0.5f) * stride;
                 }
             }
         }
         distance += end_row_index;
+    }
         /*
         if (!strcmp(type, "xywh"))
         {
@@ -66,7 +65,7 @@ static void post_regpreds(float (*distance)[4], char *type)
             }
         }
         */
-    }
+    //}
 }
 
 // ===================================
@@ -76,7 +75,7 @@ static void max_classpred(float (*cls_pred)[NUM_CLASSES], float *max_predictions
 {
     // Obtain max_prob and the max class index
     #pragma omp parallel for
-    for (int i = 0; i < ROWSIZE; ++i)
+    for (int i = 0; i < ROWSIZE ; ++i)
     {
         float *predictions = &cls_pred[i][0];
         float max_pred = 0;
@@ -130,10 +129,27 @@ static void qsort_inplace(struct Object *Objects, int left, int right)
         }
     }
 
-    if (left < j)
-        qsort_inplace(Objects, left, j);
-    if (i < right)
-        qsort_inplace(Objects, i, right);
+    #pragma omp parallel sections
+    {
+        #pragma omp section
+        {
+            if (left < j) qsort_inplace(Objects, left, j);
+        }
+        #pragma omp section
+        {
+            if (i < right) qsort_inplace(Objects, i, right);
+        }
+    }
+}
+
+int compare_objects(const void *a, const void *b) {
+    const struct Object *obj1 = (const struct Object *)a;
+    const struct Object *obj2 = (const struct Object *)b;
+
+    // Sort in descending order based on 'conf'
+    if (obj1->conf < obj2->conf) return 1;
+    if (obj1->conf > obj2->conf) return -1;
+    return 0;
 }
 
 // ========================================
@@ -155,6 +171,7 @@ static void nms_sorted_bboxes(const struct Object *faceobjects, int size, struct
     // Calculated areas
     float areas[ROWSIZE];
 
+    #pragma omp parallel for
     for (int row_index = 0; row_index < size; row_index++)
     {
         areas[row_index] = BoxArea(&faceobjects[row_index].Rect);
@@ -166,22 +183,19 @@ static void nms_sorted_bboxes(const struct Object *faceobjects, int size, struct
     float maxIOU[ROWSIZE] = {0.f}; // record max value
 
     #pragma omp parallel for
-    for (int r = 0; r < size; r++) {
-        for (int c = r + 1; c < size; c++) {
+    for (int cur_index = 0 ; cur_index < size ; ++cur_index) {
+        float max_IOU = 0.f;
+        for (int c = 0 ; c < cur_index ; ++c) {
             // Calculate IOU
-            float inter_area = intersection_area(faceobjects[r].Rect, faceobjects[c].Rect);
-            float union_area = areas[r] + areas[c] - inter_area;
+            float inter_area = intersection_area(faceobjects[cur_index].Rect, faceobjects[c].Rect);
+            float union_area = areas[cur_index] + areas[c] - inter_area;
             float iou = inter_area / union_area;
-
-            #pragma omp critical
-            {
-                if (iou > maxIOU[c]) {
-                    maxIOU[c] = iou;
-                }
+            if(iou > max_IOU){
+                max_IOU = iou;
             }
         }
+        maxIOU[cur_index] = max_IOU;
     }
-
     // Pick good instances
     for (int row_index = 0; row_index < size && *CountValidDetect < MAX_DETECTIONS; row_index++){
         if (maxIOU[row_index] < NMS_THRESHOLD) // keep Object i
@@ -218,14 +232,15 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     int max_class_index[ROWSIZE] = {0};
     max_classpred(input->cls_pred, max_clsprob, max_class_index);
 
+    // Count good Bboxes
+    int CountValidCandid = 0;
     struct Object candidates[ROWSIZE * NUM_CLASSES];
+    
     int max_wh = 4096;        // maximum box width and height
     int max_nms = 30000;      // maximum number of boxes put into torchvision.ops.nms()
     float time_limit = 10.0f; // quit the function when nms cost time exceed the limit time.
     // multi_label &= NUM_CLASSES > 1;   // multiple labels per box
 
-    // Count good Bboxes
-    int CountValidCandid = 0;
 
     int shift_num = nextPowerOf2(ROWSIZE);
     int bitwise_num = (1 << shift_num) - 1;
@@ -240,7 +255,6 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
                 // init an Object
                 struct Object obj = {box, max_class_index[row_index], max_clsprob[row_index], &(input->seg_pred[row_index][0])};
                 
-                // Use critical section to update shared array candidates
                 #pragma omp critical
                 {
                     candidates[CountValidCandid++] = obj;
@@ -251,7 +265,8 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     else
     {
         if (MULTI_LABEL)
-        {   
+        {
+            #pragma omp parallel for collapse(2)
             for (int row_index = 0; row_index < ROWSIZE; ++row_index)
             {
                 for (int class = 0; class < NUM_CLASSES; ++class)
@@ -267,13 +282,17 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
                         int new_row_index = row_index | (class << shift_num);
                         // Temporary obj
                         struct Object obj = {box, new_row_index, max_clsprob[row_index], &(input->seg_pred[row_index][0])};
-                        candidates[CountValidCandid++] = obj;
+                        #pragma omp critical
+                        {
+                            candidates[CountValidCandid++] = obj;
+                        }
                     }
                 }
             }
         }
         else
         {
+            #pragma omp parallel for
             for (int row_index = 0; row_index < ROWSIZE; ++row_index)
             {
                 if (max_clsprob[row_index] > conf_threshold)
@@ -283,10 +302,12 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
                                        input->reg_pred[row_index][1] + enlarge_factor,
                                        input->reg_pred[row_index][2] + enlarge_factor,
                                        input->reg_pred[row_index][3] + enlarge_factor};
-
                     // Temporary obj
                     struct Object obj = {box, row_index, max_clsprob[row_index], &(input->seg_pred[row_index][0])};
-                    candidates[CountValidCandid++] = obj;
+                    #pragma omp critical
+                    {
+                        candidates[CountValidCandid++] = obj;
+                    }
                 }
             }
         }
@@ -301,12 +322,13 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
 
     // Sort with confidence
     qsort_inplace(candidates, 0, CountValidCandid - 1);
+    //qsort( candidates, CountValidCandid, sizeof(candidates[0]), compare_objects);
     if (CountValidCandid > max_nms)
         CountValidCandid = max_nms;
     nms_sorted_bboxes(candidates, CountValidCandid, picked_objects, CountValidDetect);
 
     if (!AGNOSTIC){
-        for (int i = 0; i < *CountValidDetect; ++i)
+        for (int i = 0; i < *CountValidDetect ; ++i)
         {
             int row_index = picked_objects[i].label;
             int real_class = max_class_index[row_index];
@@ -325,6 +347,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
 
 static void CopyMaskCoeffs(float (*DstCoeffs)[NUM_MASKS], const int NumDetections, struct Object *ValidDetections)
 {   
+    //#pragma omp parallel for
     for (int i = 0; i < NumDetections; ++i)
     {
         memcpy(DstCoeffs[i], ValidDetections[i].maskcoeff, sizeof(float) * NUM_MASKS);
@@ -350,47 +373,75 @@ static inline void PreProcessing(float *Mask_Input, int *NumDetections, struct O
 {
     char *Bboxtype = "xyxy";
     char *classes = NULL;
-
     struct Pred_Input input;
+
+    clock_t start = clock();
     // ========================
     // Init Inputs(9 prediction input + 1 mask input) in Sources/Input.c
     // ========================
     initPredInput(&input, Mask_Input, argv, ImageIndex);
+    clock_t init_End = clock();
+
     sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
     post_regpreds(input.reg_pred, Bboxtype);
+    clock_t PreProcess = clock();
 
     non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
+    clock_t NMS = clock();
+
     printf("NMS Done,Got %d Detections...\n", *NumDetections);
 
     CopyMaskCoeffs(MaskCoeffs, *NumDetections, ValidDetections);
+    clock_t Copied = clock();
+
+    printf("==============Time Spend==============\n");
+    printf("-- Init Input time %.6f\n", (double)(init_End - start) / CLOCKS_PER_SEC * 1000);
+    printf("-- PreProcess time %.6f\n", (double)(PreProcess - init_End) / CLOCKS_PER_SEC * 1000);
+    printf("-- NMS %.6f\n", (double)(NMS - PreProcess) / CLOCKS_PER_SEC * 1000);
+    printf("-- Copied time %.6f\n", (double)(Copied - NMS) / CLOCKS_PER_SEC * 1000);
     // PrintObjectData(*NumDetections, ValidDetections);
 }
 
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
-static inline void PostProcessing(const int NumDetections, struct Object *ValidDetections, const float (* Mask_Input)[NUM_MASKS], IplImage *Img, uint8_t (*Mask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], CvScalar TextColor)
+static inline void PostProcessing(struct Output* output, const float (* Mask_Input)[NUM_MASKS], IplImage *Img, uint8_t (*Mask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], CvScalar TextColor)
 {
-    printf("Drawing Labels and Segments...\n");
+    //printf("Drawing Labels and Segments...\n");
+    const int NumDetections = output->NumDetections;
+    struct Object* ValidDetections = output->detections;
 
+    clock_t start = clock();
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
     getMaskxyxy(mask_xyxy,  TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
-    
+
+    omp_set_nested(1);
+
+    #pragma omp parallel for 
     for(int i = 0 ; i < NumDetections ; ++i){
-        memset(Mask[i], 0,  sizeof(uint8_t) * TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT);
+        memset(Mask[i], 0, sizeof(uint8_t) * TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT); // 2 / Detection
         struct Object* Detect = &ValidDetections[i];
-        handle_proto_test(Detect, Mask_Input,Mask[i]);
+        handle_proto_test( Detect, Mask_Input, Mask[i]); // 9 / Detection
         rescalebox(&Detect->Rect, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
     }
+    omp_set_nested(0);
+    clock_t handle_proto_test_time = clock();
 
     int Thickness = (int)fmaxf(roundf((Img->width + Img->height) / 2.f * 0.003f), 2);
-
-    for (int i = NumDetections - 1; i > -1; --i)
-    {
+    
+    #pragma omp parallel for 
+    for (int i = NumDetections - 1; i > -1; --i){
+        //printf("Thread Num:%d, Index: %d\n", omp_get_thread_num(), i);
         struct Object *Detect = &ValidDetections[i];
-        RescaleMaskandDrawMask(Detect->label, Mask[i], Img, mask_xyxy);
-        DrawLabel(Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
+        RescaleMask( &output->Masks[i], Mask[i], Img, mask_xyxy);
+        DrawMask( Detect->label, MASK_TRANSPARENCY, output->Masks[i], Img);
+        DrawLabel( Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
     }
-}
+    clock_t draw_masklabel_time = clock();
 
+    printf("-- handle_proto_test time per detection %.6f\n", (double)(handle_proto_test_time - start) / CLOCKS_PER_SEC * 1000 / (double)NumDetections);
+    printf("-- Draw Masks & Labels time per detection %.6f\n", (double)(draw_masklabel_time - handle_proto_test_time) / CLOCKS_PER_SEC * 1000 / (double)NumDetections);
+    printf("==============Time Spend End==============\n");
+}
+/*
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
 static inline void PostProcessingDrawByMask(const int NumDetections, struct Object *ValidDetections, const float (*Mask_Input)[NUM_MASKS],
                                           IplImage *Img, uint8_t (*Mask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], CvScalar TextColor,
@@ -430,7 +481,7 @@ static inline void PostProcessingDrawByMask(const int NumDetections, struct Obje
     {
         if (HASMASKS[i])
         {
-            RescaleMaskandDrawMask(i, OverLapMask[i], Img, mask_xyxy);
+            RescaleMask(i, OverLapMask[i], Img, mask_xyxy);
         }
     }
 
@@ -440,6 +491,7 @@ static inline void PostProcessingDrawByMask(const int NumDetections, struct Obje
         DrawLabel(Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
     }
 }
+*/
 
 static void CreateDirectory(const char *directoryPath)
 {
@@ -505,7 +557,7 @@ static void SaveResultImage(char *Directory, char *baseFileName, IplImage *Img)
     printf("Save predicted image into %s.\n", cur_directory);
 }
 
-static void SaveMask(char *Directory, char *baseFileName, uint8_t (*OverLapMask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], int *HASMASKS, IplImage *Img)
+static void SaveMask(char *Directory, char *baseFileName, const struct Output *output, IplImage *Img)
 {
 
     size_t directoryLen = strlen(Directory);
@@ -522,51 +574,13 @@ static void SaveMask(char *Directory, char *baseFileName, uint8_t (*OverLapMask)
     size_t length = strlen(cur_directory);
     strcat(cur_directory, ".jpg");
 
-    int mask_xyxy[4] = {0};
-    getMaskxyxy(mask_xyxy, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
+    const int NumDetections = output->NumDetections;
+
     IplImage *OverLapImg = cvCreateImage(cvGetSize(Img), IPL_DEPTH_8U, 1);
     cvZero(OverLapImg);
-    for (int i = 0; i < NUM_MASKS; ++i)
-    {
-        if (HASMASKS[i])
-        {
-            char int2char[20];
-            // Convert integer to string
-            // sprintf(int2char, "%d", i);
-            // strcpy(cur_directory + length, int2char);
-            // strcpy(cur_directory + length + strlen(int2char), ".jpg");
-
-            IplImage *SrcMask = cvCreateImageHeader(cvSize(TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT), IPL_DEPTH_8U, 1);
-            cvSetData(SrcMask, OverLapMask[i], SrcMask->widthStep);
-
-            // ROI Mask Region by using maskxyxy
-            CvRect roiRect = cvRect(mask_xyxy[0], mask_xyxy[1], mask_xyxy[2] - mask_xyxy[0], mask_xyxy[3] - mask_xyxy[1]); // (left, top, width, height)
-            cvSetImageROI(SrcMask, roiRect);
-
-            // Obtain ROI image
-            IplImage *roiImg = cvCreateImage(cvSize(roiRect.width, roiRect.height), SrcMask->depth, 1);
-            cvCopy(SrcMask, roiImg, NULL);
-
-            // Obtain Resized Mask
-            IplImage *FinalMask = cvCreateImage(cvGetSize(Img), roiImg->depth, 1);
-            cvResize(roiImg, FinalMask, CV_INTER_LINEAR);
-
-            // cvSaveImage(cur_directory, FinalMask, 0);
-            // printf("Saved Mask at: %s\n", cur_directory);
-            cvOr(OverLapImg, FinalMask, OverLapImg, NULL);
-
-            cvReleaseImage(&SrcMask);
-            cvReleaseImage(&roiImg);
-            cvReleaseImage(&FinalMask);
-        }
+    for (int i = 0; i < NumDetections ; ++i){
+        cvOr(OverLapImg, output->Masks[i], OverLapImg, NULL);
     }
-    // char overlap_directory[MAX_FILENAME_LENGTH];
-    // strcpy(overlap_directory, Directory);
-    // strcat(overlap_directory, "OverLapMask/");
-    // CreateDirectory(overlap_directory);
-    // strcat(overlap_directory, baseFileName);
-    // strcat(overlap_directory, ".jpg");
-    // printf("Save OverLap Image at %s\n", overlap_directory);
     cvSaveImage(cur_directory, OverLapImg, 0);
     cvReleaseImage(&OverLapImg);
 }
@@ -609,13 +623,11 @@ static void AppendandCreateDirectory(char *directory, char *foldername, char *Re
 
 int main(int argc, const char **argv)
 {
-
     FILE *ImageDataFile;
     char NameBuffer[MAX_FILENAME_LENGTH];
     int ImageCount = 0;
     CvScalar TextColor = CV_RGB(255, 255, 255);
     static uint8_t Mask[MAX_DETECTIONS][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
-    static uint8_t OverLapMask[NUM_CLASSES][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
 
     char *PredictionDirectory = "./Prediction";
     CreateDirectory(PredictionDirectory);
@@ -645,18 +657,15 @@ int main(int argc, const char **argv)
     }
 
     // Read the string from a .txt File
-    while (fgets(NameBuffer, sizeof(NameBuffer), ImageDataFile) != NULL && ImageCount < READIMAGE_LIMIT){
-
+    while (fgets(NameBuffer, sizeof(NameBuffer), ImageDataFile) != NULL && ImageCount < READIMAGE_LIMIT){\
+        struct Output output;
         NameBuffer[strcspn(NameBuffer, "\n")] = '\0';
         IplImage *Img = cvLoadImage(NameBuffer, CV_LOAD_IMAGE_COLOR);
         if (!Img){
             printf("%s not found\n", NameBuffer);
             continue;
         }
-
-        if (DRAWPERMASK){
-            memset(OverLapMask, 0, sizeof(uint8_t) * NUM_CLASSES * TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH);
-        }
+        init_Output( &output, Img->width, Img->depth);
 
         printf("===============Reading Image: %s ===============\n", NameBuffer);
         float Mask_Coeffs[MAX_DETECTIONS][NUM_MASKS];
@@ -664,26 +673,28 @@ int main(int argc, const char **argv)
         struct Object ValidDetections[MAX_DETECTIONS];
         int NumDetections = 0;
 
-        int HASMASKS[NUM_CLASSES] = {0};
         // Read Input + Process Input + NMS
         PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, Mask_Coeffs, argv, ImageCount);
+
+        output.NumDetections = NumDetections;
+        memcpy(output.detections, ValidDetections, sizeof(struct Object) * NumDetections);
         // Store Masks Results
-        if (DRAWPERMASK){
-            PostProcessingDrawByMask(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor, OverLapMask, HASMASKS);
-        }else{
-            PostProcessing(NumDetections, ValidDetections, Mask_Input, Img, Mask, TextColor);
-        }
+        PostProcessing( &output, Mask_Input, Img, Mask, TextColor);
+
         printf("============Drawing Mask and Labels Complete============\n");
 
         // Saving Data
         char BaseName[MAX_FILENAME_LENGTH];
         extractBaseName(NameBuffer, BaseName);
+        
         if (SAVEMASK){
-            SaveMask(MaskDirectory, BaseName, OverLapMask, HASMASKS, Img);
-            SavePosition(PositionDirectory, BaseName, NumDetections, ValidDetections);
+            SaveMask(MaskDirectory, BaseName, &output, Img);
+            SavePosition(PositionDirectory, BaseName, output.NumDetections, output.detections);
+            printf("===============Saved Masks Complete===============\n");
         }
-        SaveResultImage(ResultDirectory, BaseName, Img);
 
+        SaveResultImage(ResultDirectory, BaseName, Img);
+        releaseAllMasks(&output);
         cvReleaseImage(&Img);
         printf("===============Saved Image Complete===============\n");
         printf("\n\n");
@@ -699,21 +710,6 @@ Type:
 gcc main.c -o T ./Sources/Input.c ./Sources/Bbox.c  `pkg-config --cflags --libs opencv` -lm
 time ./T ./ImgData.txt ./outputs/cls_preds8.txt ./outputs/cls_preds16.txt ./outputs/cls_preds32.txt ./outputs/reg_preds8.txt ./outputs/reg_preds16.txt ./outputs/reg_preds32.txt ./outputs/seg_preds8.txt ./outputs/seg_preds16.txt ./outputs/seg_preds32.txt ./outputs/mask_input.txt
 ================================================================================================================================================================
-*/
-
-/*
-32 * 96 * 160
-=> [96 * 160][32]
-
- 0  1  2  3  4  5  6
- 7  8  9 10 11 12 13
-14 15 16 17 18 19 20
-
- * 4
-=>
-reshaped 
-permute
-
 */
 
 /*
@@ -757,10 +753,18 @@ user    0m0.611s
 sys     0m0.061s
 
 
-5 images
-- sigmoid, mask matrix multiplication, max_classpred, Generate_Anchor, Calculate IOU
+- sigmoid, mask matrix multiplication, max_classpred, Generate_Anchor, Calculate IOU, Calculate Masks output
+real    0m0.437s
+user    0m0.618s
+sys     0m0.061s
 
-real    0m4.781s
-user    0m5.351s
-sys     0m0.145s
+real    0m0.481s
+user    0m0.644s
+sys     0m0.036s
+-- Init Input time 301.988000
+-- PreProcess time 3.056000
+-- NMS 1.131000
+-- Copied time 0.006000
+-- handle_proto_test time per detection 7.542636
+-- Draw Masks & Labels time per detection 14.104909
 */
