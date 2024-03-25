@@ -29,7 +29,7 @@ static unsigned int hex_colors[20] = {0xFF3838, 0xFF9D97, 0xFF701F, 0xFFB21D, 0x
 
 static inline void sigmoid(int rowsize, int colsize, float *ptr)
 {
-    #pragma omp parallel for collapse(2)
+    #pragma omp parallel for collapse(2) schedule(static, CHUNKSIZE)
     for (int i = 0; i < rowsize; ++i) {
         for (int j = 0; j < colsize ; ++j) {
             int index = i * colsize + j;
@@ -59,7 +59,7 @@ static void handle_proto_test(struct Object* obj, const float (*masks)[NUM_MASKS
     float Binary_Thres = 0.45f;
     float pred_mask[MASK_SIZE_WIDTH * MASK_SIZE_HEIGHT] = {0};
     
-    #pragma omp parallel for collapse(2)
+    #pragma omp parallel for collapse(2) schedule(static, CHUNKSIZE * 4)
     for (int i = 0; i < MASK_SIZE_HEIGHT; ++i) {
         for (int j = 0; j < MASK_SIZE_WIDTH; ++j) {
             float Pixel = 0.f;

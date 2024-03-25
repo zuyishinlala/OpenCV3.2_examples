@@ -26,7 +26,7 @@ static void post_regpreds(float (*distance)[4], char *type)
 
         int end_row_index = row_bound * col_bound;
 
-        #pragma omp parallel for collapse(2) schedule(dynamic)
+        #pragma omp parallel for collapse(2) schedule(static, CHUNKSIZE)
         for (int anchor_points_y = 0 ; anchor_points_y < row_bound ; ++anchor_points_y)
         {
             for (int anchor_points_x = 0 ; anchor_points_x < col_bound ; ++anchor_points_x)
@@ -74,14 +74,13 @@ static void post_regpreds(float (*distance)[4], char *type)
 static void max_classpred(float (*cls_pred)[NUM_CLASSES], float *max_predictions, int *class_index)
 {
     // Obtain max_prob and the max class index
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(static, CHUNKSIZE)
     for (int i = 0; i < ROWSIZE ; ++i)
     {
         float *predictions = &cls_pred[i][0];
         float max_pred = 0;
         int max_class_index = -1;
 
-        // iterate all class probability
         for (int class_idx = 0; class_idx < NUM_CLASSES; ++class_idx)
         {
             if (max_pred < predictions[class_idx])
@@ -171,7 +170,7 @@ static void nms_sorted_bboxes(const struct Object *faceobjects, int size, struct
     // Calculated areas
     float areas[ROWSIZE];
 
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(static)
     for (int row_index = 0; row_index < size; row_index++)
     {
         areas[row_index] = BoxArea(&faceobjects[row_index].Rect);
@@ -182,7 +181,7 @@ static void nms_sorted_bboxes(const struct Object *faceobjects, int size, struct
     // ==============================
     float maxIOU[ROWSIZE] = {0.f}; // record max value
 
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(dynamic)
     for (int cur_index = 0 ; cur_index < size ; ++cur_index) {
         float max_IOU = 0.f;
         for (int c = 0 ; c < cur_index ; ++c) {
@@ -246,7 +245,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     int bitwise_num = (1 << shift_num) - 1;
 
     if (AGNOSTIC){
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(static, CHUNKSIZE)
         for (int row_index = 0; row_index < ROWSIZE; ++row_index)
         {
             if (max_clsprob[row_index] > conf_threshold)
@@ -432,13 +431,15 @@ static inline void PostProcessing(struct Output* output, const float (* Mask_Inp
         //printf("Thread Num:%d, Index: %d\n", omp_get_thread_num(), i);
         struct Object *Detect = &ValidDetections[i];
         RescaleMask( &output->Masks[i], Mask[i], Img, mask_xyxy);
-        DrawMask( Detect->label, MASK_TRANSPARENCY, output->Masks[i], Img);
-        DrawLabel( Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
+        //DrawMask( Detect->label, MASK_TRANSPARENCY, output->Masks[i], Img);
+        //DrawLabel( Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
     }
     clock_t draw_masklabel_time = clock();
 
     printf("-- handle_proto_test time per detection %.6f\n", (double)(handle_proto_test_time - start) / CLOCKS_PER_SEC * 1000 / (double)NumDetections);
+    printf("-- Total Handle_proto_test:%.6f\n", (double)(handle_proto_test_time - start) / CLOCKS_PER_SEC * 1000);
     printf("-- Draw Masks & Labels time per detection %.6f\n", (double)(draw_masklabel_time - handle_proto_test_time) / CLOCKS_PER_SEC * 1000 / (double)NumDetections);
+    printf("-- Total Draw Masks & Labels time  %.6f\n", (double)(draw_masklabel_time - handle_proto_test_time) / CLOCKS_PER_SEC * 1000);
     printf("==============Time Spend End==============\n");
 }
 /*

@@ -34,9 +34,9 @@
 #define MULTI_LABEL 0  // True: 1 anchor box can have > 1 labels False: one box only have one label.
 #define SAVEMASK 0    // True: Save Mask & positions & results  False: only save results
 //#define DRAWPERMASK 0  // True: Draw per Mask                    False: Draw per detection
-
+#define CHUNKSIZE 18
 // OpenCV parameters for drawing
 #define MASK_TRANSPARENCY 0.8f // 0 to 1
-#define READIMAGE_LIMIT 1
+#define READIMAGE_LIMIT 5
 
 #endif
