@@ -14,7 +14,7 @@ int cvRound(double value) {return(ceil(value));}
 float cvRoundf(float value) {return roundf(value);}
 
 static char* names[] = {
-        "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
+        "drivable", "alternatives", "line", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
         "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
         "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
         "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
@@ -49,14 +49,13 @@ static inline void getMaskxyxy(int* xyxy, float org_size_w, float org_size_h, fl
 }
 
 // Obtain Uncropped Mask
-static void handle_proto_test(struct Object* obj, const float (*masks)[NUM_MASKS], uint8_t* UncroppedMask)
+static void handle_proto_test(struct Object* obj, const float (*masks)[NUM_MASKS], uint8_t* UncroppedMask, float Binary_Thres)
 {
     // Resize mask & Obtain Binary Mask
     // Matrix Multiplication
     float* maskcoeffs = obj->maskcoeff;
     struct Bbox box = obj->Rect;
 
-    float Binary_Thres = 0.45f;
     float pred_mask[MASK_SIZE_WIDTH * MASK_SIZE_HEIGHT] = {0};
     
     #pragma omp parallel for collapse(2) schedule(static, CHUNKSIZE * 4)
@@ -103,7 +102,7 @@ static void handle_proto_test(struct Object* obj, const float (*masks)[NUM_MASKS
 
 // Rescale Bbox: Bounding Box positions to Real place
 static void rescalebox(struct Bbox *Box, float src_size_w, float src_size_h, float tar_size_w, float tar_size_h){
-    float ratio = fminf(src_size_w/ tar_size_w, src_size_h/tar_size_h);
+    float ratio = fminf( src_size_w/tar_size_w, src_size_h/tar_size_h);
     
     float padding_w = (src_size_w - tar_size_w * ratio) / 2;
     float padding_h = (src_size_h - tar_size_h * ratio) / 2;

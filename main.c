@@ -413,33 +413,30 @@ static inline void PostProcessing(struct Output* output, const float (* Mask_Inp
     getMaskxyxy(mask_xyxy,  TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
 
     omp_set_nested(1);
-
     #pragma omp parallel for 
     for(int i = 0 ; i < NumDetections ; ++i){
         memset(Mask[i], 0, sizeof(uint8_t) * TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT); // 2 / Detection
         struct Object* Detect = &ValidDetections[i];
-        handle_proto_test( Detect, Mask_Input, Mask[i]); // 9 / Detection
+        handle_proto_test( Detect, Mask_Input, Mask[i], MASK_THRESHOLD); // 9 / Detection
         rescalebox(&Detect->Rect, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
     }
     omp_set_nested(0);
+
     clock_t handle_proto_test_time = clock();
 
     int Thickness = (int)fmaxf(roundf((Img->width + Img->height) / 2.f * 0.003f), 2);
     
-    #pragma omp parallel for 
     for (int i = NumDetections - 1; i > -1; --i){
         //printf("Thread Num:%d, Index: %d\n", omp_get_thread_num(), i);
         struct Object *Detect = &ValidDetections[i];
         RescaleMask( &output->Masks[i], Mask[i], Img, mask_xyxy);
-        //DrawMask( Detect->label, MASK_TRANSPARENCY, output->Masks[i], Img);
-        //DrawLabel( Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
+        DrawMask( Detect->label, MASK_TRANSPARENCY, output->Masks[i], Img);
+        DrawLabel( Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
     }
     clock_t draw_masklabel_time = clock();
 
-    printf("-- handle_proto_test time per detection %.6f\n", (double)(handle_proto_test_time - start) / CLOCKS_PER_SEC * 1000 / (double)NumDetections);
-    printf("-- Total Handle_proto_test:%.6f\n", (double)(handle_proto_test_time - start) / CLOCKS_PER_SEC * 1000);
-    printf("-- Draw Masks & Labels time per detection %.6f\n", (double)(draw_masklabel_time - handle_proto_test_time) / CLOCKS_PER_SEC * 1000 / (double)NumDetections);
-    printf("-- Total Draw Masks & Labels time  %.6f\n", (double)(draw_masklabel_time - handle_proto_test_time) / CLOCKS_PER_SEC * 1000);
+    printf("-- Handle_proto_test Avg: %.6f, Total:%.6f\n", (double)(handle_proto_test_time - start) / CLOCKS_PER_SEC * 1000 / (double)NumDetections, (double)(handle_proto_test_time - start) / CLOCKS_PER_SEC * 1000 );
+    printf("-- Draw Time: Avg:%.6f, Total: %.6f\n", (double)(draw_masklabel_time - handle_proto_test_time) / CLOCKS_PER_SEC * 1000  / (double)NumDetections, (double)(draw_masklabel_time - handle_proto_test_time) / CLOCKS_PER_SEC * 1000);
     printf("==============Time Spend End==============\n");
 }
 /*
@@ -629,6 +626,7 @@ int main(int argc, const char **argv)
     int ImageCount = 0;
     CvScalar TextColor = CV_RGB(255, 255, 255);
     static uint8_t Mask[MAX_DETECTIONS][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
+    static uint8_t OverLapMask[NUM_CLASSES][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
 
     char *PredictionDirectory = "./Prediction";
     CreateDirectory(PredictionDirectory);
@@ -643,11 +641,10 @@ int main(int argc, const char **argv)
     char *subPositionDirectory = "/Position/";
     char PositionDirectory[MAX_FILENAME_LENGTH];
 
-    if (SAVEMASK)
-    {
-        AppendandCreateDirectory(PredictionDirectory, subMaskDirectory, MaskDirectory);
-        AppendandCreateDirectory(PredictionDirectory, subPositionDirectory, PositionDirectory);
-    }
+    char *subMaskperClassDirectory = "/MaskperClass/";
+    char MaskperClassDirectory[MAX_FILENAME_LENGTH];
+
+    struct Output output;
 
     // Open ImgData.txt that stores Image Directories
     ImageDataFile = fopen(argv[1], "r");
@@ -658,8 +655,7 @@ int main(int argc, const char **argv)
     }
 
     // Read the string from a .txt File
-    while (fgets(NameBuffer, sizeof(NameBuffer), ImageDataFile) != NULL && ImageCount < READIMAGE_LIMIT){\
-        struct Output output;
+    while (fgets(NameBuffer, sizeof(NameBuffer), ImageDataFile) != NULL && ImageCount < READIMAGE_LIMIT){
         NameBuffer[strcspn(NameBuffer, "\n")] = '\0';
         IplImage *Img = cvLoadImage(NameBuffer, CV_LOAD_IMAGE_COLOR);
         if (!Img){
@@ -667,8 +663,7 @@ int main(int argc, const char **argv)
             continue;
         }
         init_Output( &output, Img->width, Img->depth);
-
-        printf("===============Reading Image: %s ===============\n", NameBuffer);
+        printf("===============Reading Image: %s===============\n", NameBuffer);
         float Mask_Coeffs[MAX_DETECTIONS][NUM_MASKS];
         float Mask_Input[MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH][NUM_MASKS];
         struct Object ValidDetections[MAX_DETECTIONS];
@@ -689,11 +684,18 @@ int main(int argc, const char **argv)
         extractBaseName(NameBuffer, BaseName);
         
         if (SAVEMASK){
+            AppendandCreateDirectory(PredictionDirectory, subMaskDirectory, MaskDirectory);
+            AppendandCreateDirectory(PredictionDirectory, subPositionDirectory, PositionDirectory);
             SaveMask(MaskDirectory, BaseName, &output, Img);
             SavePosition(PositionDirectory, BaseName, output.NumDetections, output.detections);
             printf("===============Saved Masks Complete===============\n");
         }
-
+        /*
+        if(SAVEPERMASK){
+            AppendandCreateDirectory(PredictionDirectory, subMaskperClassDirectory, MaskperClassDirectory);
+            SaveperMask(MaskperClassDirectory, OverLapMask, &output);
+        }
+        */
         SaveResultImage(ResultDirectory, BaseName, Img);
         releaseAllMasks(&output);
         cvReleaseImage(&Img);
@@ -708,7 +710,7 @@ int main(int argc, const char **argv)
 /*
 ================================================================================================================================================================
 Type:
-gcc main.c -o T ./Sources/Input.c ./Sources/Bbox.c  `pkg-config --cflags --libs opencv` -lm
+gcc main.c -o T ./Sources/Input.c ./Sources/Bbox.c ./Sources/Output.c  `pkg-config --cflags --libs opencv` -lm -fopenmp
 time ./T ./ImgData.txt ./outputs/cls_preds8.txt ./outputs/cls_preds16.txt ./outputs/cls_preds32.txt ./outputs/reg_preds8.txt ./outputs/reg_preds16.txt ./outputs/reg_preds32.txt ./outputs/seg_preds8.txt ./outputs/seg_preds16.txt ./outputs/seg_preds32.txt ./outputs/mask_input.txt
 ================================================================================================================================================================
 */
