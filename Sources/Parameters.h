@@ -41,5 +41,5 @@
 
 // OpenCV parameters for drawing
 #define MASK_TRANSPARENCY 0.8f // 0 to 1
-#define READIMAGE_LIMIT 5
+#define READIMAGE_LIMIT 10
 #endif

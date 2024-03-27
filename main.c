@@ -19,19 +19,28 @@
 // dist2bbox & generate_anchor in YOLOv6
 static void post_regpreds(float (*distance)[4], char *type)
 {
-    float stride = 8.f;
+    // float stride = 8.f;
     int row_bound = HEIGHT0, col_bound = WIDTH0;
+    const int row_start[3] = {0, HEIGHT0 * WIDTH0, HEIGHT0 * WIDTH0 + HEIGHT1 * WIDTH1};
+    const int row_bound_arr[3] = {HEIGHT0, HEIGHT1, HEIGHT2};
+    const int col_bound_arr[3] = { WIDTH0,  WIDTH1,  WIDTH2};
+    const float strides[3] = {8.f, 16.f, 32.f};
 
-    for (int stride_index = 0 ; stride_index < 3 ; ++stride_index, row_bound /= 2, col_bound /= 2, stride *= 2){
+    #pragma omp parallel for
+    for (int stride_index = 0 ; stride_index < 3 ; ++stride_index){
 
-        int end_row_index = row_bound * col_bound;
-
-        #pragma omp parallel for collapse(2) schedule(static, CHUNKSIZE)
+        //int end_row_index = row_bound * col_bound;
+        int row_bound = row_bound_arr[stride_index];
+        int col_bound = col_bound_arr[stride_index];
+        float stride = strides[stride_index];
+    
+        #pragma omp parallel for collapse(2) schedule(static)
         for (int anchor_points_y = 0 ; anchor_points_y < row_bound ; ++anchor_points_y)
-        {
+        {   
+            //printf("Thread: %d Stride Index: %d\n", omp_get_num_threads(),  stride_index);
             for (int anchor_points_x = 0 ; anchor_points_x < col_bound ; ++anchor_points_x)
             {
-                int row = anchor_points_y * col_bound + anchor_points_x;
+                int row = anchor_points_y * col_bound + anchor_points_x + row_start[stride_index];
                 float *data = &distance[row][0]; // left, top, right, bottom
 
                 // x1y1 = anchor_points - lt
@@ -39,17 +48,43 @@ static void post_regpreds(float (*distance)[4], char *type)
                 data[1] = anchor_points_y - data[1];
 
                 // x2y2 = anchor_points + rb
-                data[2] += anchor_points_x ; // anchor_points_c + data[2]
-                data[3] += anchor_points_y ; // anchor_points_r + data[3]
+                data[2] += anchor_points_x; // anchor_points_c + data[2]
+                data[3] += anchor_points_y; // anchor_points_r + data[3]
 
                 for (int j = 0 ; j < 4 ; ++j){
                     distance[row][j] = (distance[row][j] + 0.5f) * stride;
                 }
             }
         }
-        distance += end_row_index;
+        //distance += end_row_index;
     }
-        /*
+    int min_block_size = WIDTH2 * HEIGHT2;
+
+    // #pragma omp parallel for schedule(static, CHUNKSIZE)
+    // for(int i = 0 ; i < ROWSIZE ; ++i){
+    //     int block_index = i / min_block_size;
+    //     int stride_index = (block_index < 16) ? 0 : (block_index < 19) ? 1 : 2;
+    //     int block_size_w = col_bound_arr[stride_index];
+    //     int relative_block_index = i - row_start[stride_index];
+    //     float stride = strides[stride_index];
+
+    //     int anchor_points_x = relative_block_index % block_size_w;
+    //     int anchor_points_y = relative_block_index / block_size_w;
+
+    //     float *data = &distance[i][0]; // left, top, right, bottom
+    //     // x1y1 = anchor_points - lt
+    //     data[0] = anchor_points_x - data[0];
+    //     data[1] = anchor_points_y - data[1];
+
+    //     // x2y2 = anchor_points + rb
+    //     data[2] += anchor_points_x ; // anchor_points_c + data[2]
+    //     data[3] += anchor_points_y ; // anchor_points_r + data[3]
+
+    //     for (int j = 0 ; j < 4 ; ++j){
+    //         distance[i][j] = (distance[i][j] + 0.5f) * stride;
+    //     }
+    // }
+    /*
         if (!strcmp(type, "xywh"))
         {
             // c_xy = (x1y1 + x2y2) / 2
