@@ -35,16 +35,16 @@ static void post_regpreds(float (*distance)[4], char *type)
                 float *data = &distance[row][0]; // left, top, right, bottom
 
                 // x1y1 = anchor_points - lt
-                data[0] = (anchor_points_x - data[0] + 0.5f) * stride;
-                data[1] = (anchor_points_y - data[1] + 0.5f) * stride;
+                data[0] = anchor_points_x - data[0];
+                data[1] = anchor_points_y - data[1];
 
                 // x2y2 = anchor_points + rb
-                data[2] += (anchor_points_x + 0.5f) * stride; // anchor_points_c + data[2]
-                data[3] += (anchor_points_y + 0.5f) * stride; // anchor_points_r + data[3]
+                data[2] += anchor_points_x ; // anchor_points_c + data[2]
+                data[3] += anchor_points_y ; // anchor_points_r + data[3]
 
-                // for (int j = 0 ; j < 4 ; ++j){
-                //     distance[row][j] = (distance[row][j] + 0.5f) * stride;
-                // }
+                for (int j = 0 ; j < 4 ; ++j){
+                    distance[row][j] = (distance[row][j] + 0.5f) * stride;
+                }
             }
         }
         distance += end_row_index;
@@ -429,8 +429,8 @@ static double PostProcessing(struct Output* output, const float (* Mask_Input)[N
         //printf("Thread Num:%d, Index: %d\n", omp_get_thread_num(), i);
         struct Object *Detect = &ValidDetections[i];
         RescaleMask( &output->Masks[i], Mask[i], Img, mask_xyxy);
-        //DrawMask( Detect->label, MASK_TRANSPARENCY, output->Masks[i], Img);
-        //DrawLabel( Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
+        DrawMask( Detect->label, MASK_TRANSPARENCY, output->Masks[i], Img);
+        DrawLabel( Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
     }
     double draw_masklabel_time = omp_get_wtime();
 
@@ -662,7 +662,8 @@ int main(int argc, const char **argv)
             continue;
         }
         init_Output( &output, Img->width, Img->depth);
-        printf("===============Reading Image: %s===============\n", NameBuffer);
+        printf("*********************************************\n");
+        printf("**************Reading Image: %s**************\n", NameBuffer);
         float Mask_Coeffs[MAX_DETECTIONS][NUM_MASKS];
         float Mask_Input[MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH][NUM_MASKS];
         struct Object ValidDetections[MAX_DETECTIONS];
@@ -702,7 +703,7 @@ int main(int argc, const char **argv)
         SaveResultImage(ResultDirectory, BaseName, Img);
         releaseAllMasks(&output);
         cvReleaseImage(&Img);
-        printf("===============Saved Image Complete===============\n");
+        printf("**************Saved Result Complete**************\n");
         printf("\n\n");
         ++ImageCount;
     }
