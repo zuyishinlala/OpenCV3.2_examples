@@ -17,6 +17,8 @@
         "bbox.h": "c",
         "input.h": "c",
         "string.h": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "cxcore.h": "c",
+        "omp.h": "c"
     }
 }

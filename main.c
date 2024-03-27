@@ -35,16 +35,16 @@ static void post_regpreds(float (*distance)[4], char *type)
                 float *data = &distance[row][0]; // left, top, right, bottom
 
                 // x1y1 = anchor_points - lt
-                data[0] = anchor_points_x - data[0];
-                data[1] = anchor_points_y - data[1];
+                data[0] = (anchor_points_x - data[0] + 0.5f) * stride;
+                data[1] = (anchor_points_y - data[1] + 0.5f) * stride;
 
                 // x2y2 = anchor_points + rb
-                data[2] += anchor_points_x; // anchor_points_c + data[2]
-                data[3] += anchor_points_y; // anchor_points_r + data[3]
+                data[2] += (anchor_points_x + 0.5f) * stride; // anchor_points_c + data[2]
+                data[3] += (anchor_points_y + 0.5f) * stride; // anchor_points_r + data[3]
 
-                for (int j = 0 ; j < 4 ; ++j){
-                    distance[row][j] = (distance[row][j] + 0.5f) * stride;
-                }
+                // for (int j = 0 ; j < 4 ; ++j){
+                //     distance[row][j] = (distance[row][j] + 0.5f) * stride;
+                // }
             }
         }
         distance += end_row_index;
@@ -74,7 +74,7 @@ static void post_regpreds(float (*distance)[4], char *type)
 static void max_classpred(float (*cls_pred)[NUM_CLASSES], float *max_predictions, int *class_index)
 {
     // Obtain max_prob and the max class index
-    #pragma omp parallel for schedule(static, CHUNKSIZE)
+    #pragma omp parallel for schedule(static)
     for (int i = 0; i < ROWSIZE ; ++i)
     {
         float *predictions = &cls_pred[i][0];
@@ -195,10 +195,11 @@ static void nms_sorted_bboxes(const struct Object *faceobjects, int size, struct
         }
         maxIOU[cur_index] = max_IOU;
     }
+
     // Pick good instances
-    for (int row_index = 0; row_index < size && *CountValidDetect < MAX_DETECTIONS; row_index++){
-        if (maxIOU[row_index] < NMS_THRESHOLD) // keep Object i
-            picked_object[(*CountValidDetect)++] = faceobjects[row_index];
+    for (int i = 0; i < size && *CountValidDetect < MAX_DETECTIONS; i++){
+        if (maxIOU[i] < NMS_THRESHOLD) // keep Object i
+            picked_object[(*CountValidDetect)++] = faceobjects[i];
     }
     return;
 }
@@ -245,7 +246,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     int bitwise_num = (1 << shift_num) - 1;
 
     if (AGNOSTIC){
-        #pragma omp parallel for schedule(static, CHUNKSIZE)
+        #pragma omp parallel for schedule(static)
         for (int row_index = 0; row_index < ROWSIZE; ++row_index)
         {
             if (max_clsprob[row_index] > conf_threshold)
@@ -265,7 +266,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     {
         if (MULTI_LABEL)
         {
-            #pragma omp parallel for collapse(2)
+            #pragma omp parallel for collapse(2) schedule(static)
             for (int row_index = 0; row_index < ROWSIZE; ++row_index)
             {
                 for (int class = 0; class < NUM_CLASSES; ++class)
@@ -291,7 +292,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
         }
         else
         {
-            #pragma omp parallel for
+            #pragma omp parallel for schedule(static)
             for (int row_index = 0; row_index < ROWSIZE; ++row_index)
             {
                 if (max_clsprob[row_index] > conf_threshold)
@@ -322,8 +323,7 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     // Sort with confidence
     qsort_inplace(candidates, 0, CountValidCandid - 1);
     //qsort( candidates, CountValidCandid, sizeof(candidates[0]), compare_objects);
-    if (CountValidCandid > max_nms)
-        CountValidCandid = max_nms;
+    if (CountValidCandid > max_nms) CountValidCandid = max_nms;
     nms_sorted_bboxes(candidates, CountValidCandid, picked_objects, CountValidDetect);
 
     if (!AGNOSTIC){
@@ -368,76 +368,75 @@ static inline void PrintObjectData(int NumDetections, struct Object *ValidDetect
 }
 
 // Read Inputs + Pre-process of Inputs + NMS
-static inline void PreProcessing(float *Mask_Input, int *NumDetections, struct Object *ValidDetections, float (*MaskCoeffs)[NUM_MASKS], const char **argv, int ImageIndex)
+static double PreProcessing(float *Mask_Input, int *NumDetections, struct Object *ValidDetections, float (*MaskCoeffs)[NUM_MASKS], const char **argv, int ImageIndex)
 {
     char *Bboxtype = "xyxy";
     char *classes = NULL;
     struct Pred_Input input;
 
-    clock_t start = clock();
+    double start = omp_get_wtime( );
     // ========================
     // Init Inputs(9 prediction input + 1 mask input) in Sources/Input.c
     // ========================
     initPredInput(&input, Mask_Input, argv, ImageIndex);
-    clock_t init_End = clock();
-
+    double init_End = omp_get_wtime( );
     sigmoid(ROWSIZE, NUM_CLASSES, &input.cls_pred[0][0]);
     post_regpreds(input.reg_pred, Bboxtype);
-    clock_t PreProcess = clock();
+    double PreProcess =  omp_get_wtime( );
 
     non_max_suppression_seg(&input, classes, ValidDetections, NumDetections, CONF_THRESHOLD);
-    clock_t NMS = clock();
+    double NMS = omp_get_wtime( );
 
     printf("NMS Done,Got %d Detections...\n", *NumDetections);
 
     CopyMaskCoeffs(MaskCoeffs, *NumDetections, ValidDetections);
-    clock_t Copied = clock();
+    double Copied =  omp_get_wtime( );
 
-    printf("==============Time Spend==============\n");
-    printf("-- Init Input time %.6f\n", (double)(init_End - start) / CLOCKS_PER_SEC * 1000);
-    printf("-- PreProcess time %.6f\n", (double)(PreProcess - init_End) / CLOCKS_PER_SEC * 1000);
-    printf("-- NMS %.6f\n", (double)(NMS - PreProcess) / CLOCKS_PER_SEC * 1000);
-    printf("-- Copied time %.6f\n", (double)(Copied - NMS) / CLOCKS_PER_SEC * 1000);
+    // printf("==============Time Spend==============\n");
+    // printf("-- Init Input time %.6f ms\n", (init_End - start) * 1000);
+    printf("-- PreProcess time %.6f ms\n", (PreProcess - init_End)  * 1000);
+    printf("-- NMS %.6f ms\n", (NMS - PreProcess)  * 1000);
+    printf("-- Copied mask coeffs time %.6f ms\n", (Copied - NMS) * 1000);
     // PrintObjectData(*NumDetections, ValidDetections);
+    return Copied - init_End;
 }
 
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
-static inline void PostProcessing(struct Output* output, const float (* Mask_Input)[NUM_MASKS], IplImage *Img, uint8_t (*Mask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], CvScalar TextColor)
+static double PostProcessing(struct Output* output, const float (* Mask_Input)[NUM_MASKS], IplImage *Img, uint8_t (*Mask)[TRAINED_SIZE_HEIGHT * TRAINED_SIZE_WIDTH], CvScalar TextColor)
 {
     //printf("Drawing Labels and Segments...\n");
     const int NumDetections = output->NumDetections;
     struct Object* ValidDetections = output->detections;
 
-    clock_t start = clock();
+    double start = omp_get_wtime();
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
     getMaskxyxy(mask_xyxy,  TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
 
-    omp_set_nested(1);
-    #pragma omp parallel for 
+    //#pragma omp parallel for schedule(static)
     for(int i = 0 ; i < NumDetections ; ++i){
         memset(Mask[i], 0, sizeof(uint8_t) * TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT); // 2 / Detection
         struct Object* Detect = &ValidDetections[i];
         handle_proto_test( Detect, Mask_Input, Mask[i], MASK_THRESHOLD); // 9 / Detection
         rescalebox(&Detect->Rect, TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
     }
-    omp_set_nested(0);
 
-    clock_t handle_proto_test_time = clock();
+    double handle_proto_test_time = omp_get_wtime();
 
     int Thickness = (int)fmaxf(roundf((Img->width + Img->height) / 2.f * 0.003f), 2);
-    
+
+    #pragma omp parallel for ordered
     for (int i = NumDetections - 1; i > -1; --i){
         //printf("Thread Num:%d, Index: %d\n", omp_get_thread_num(), i);
         struct Object *Detect = &ValidDetections[i];
         RescaleMask( &output->Masks[i], Mask[i], Img, mask_xyxy);
-        DrawMask( Detect->label, MASK_TRANSPARENCY, output->Masks[i], Img);
-        DrawLabel( Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
+        //DrawMask( Detect->label, MASK_TRANSPARENCY, output->Masks[i], Img);
+        //DrawLabel( Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
     }
-    clock_t draw_masklabel_time = clock();
+    double draw_masklabel_time = omp_get_wtime();
 
-    printf("-- Handle_proto_test Avg: %.6f, Total:%.6f\n", (double)(handle_proto_test_time - start) / CLOCKS_PER_SEC * 1000 / (double)NumDetections, (double)(handle_proto_test_time - start) / CLOCKS_PER_SEC * 1000 );
-    printf("-- Draw Time: Avg:%.6f, Total: %.6f\n", (double)(draw_masklabel_time - handle_proto_test_time) / CLOCKS_PER_SEC * 1000  / (double)NumDetections, (double)(draw_masklabel_time - handle_proto_test_time) / CLOCKS_PER_SEC * 1000);
-    printf("==============Time Spend End==============\n");
+    printf("-- Handle_proto_test Avg: %.6f ms, Total:%.6f ms\n",(handle_proto_test_time - start)/(double)NumDetections * 1000, (handle_proto_test_time - start)  * 1000);
+    printf("-- Rescale Mask Time: Avg:%.6f ms, Total: %.6f ms\n", (draw_masklabel_time - handle_proto_test_time) /(double)NumDetections  * 1000, (draw_masklabel_time - handle_proto_test_time) * 1000);
+    return draw_masklabel_time - start;
 }
 /*
 // Post NMS(Rescale Mask, Draw Label) in Post_NMS.c
@@ -574,7 +573,7 @@ static void SaveMask(char *Directory, char *baseFileName, const struct Output *o
 
     const int NumDetections = output->NumDetections;
 
-    IplImage *OverLapImg = cvCreateImage(cvGetSize(Img), IPL_DEPTH_8U, 1);
+    IplImage *OverLapImg = cvCreateImage(cvGetSize(Img), Img->depth, 1);
     cvZero(OverLapImg);
     for (int i = 0; i < NumDetections ; ++i){
         cvOr(OverLapImg, output->Masks[i], OverLapImg, NULL);
@@ -626,7 +625,7 @@ int main(int argc, const char **argv)
     int ImageCount = 0;
     CvScalar TextColor = CV_RGB(255, 255, 255);
     static uint8_t Mask[MAX_DETECTIONS][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
-    static uint8_t OverLapMask[NUM_CLASSES][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
+    //static uint8_t OverLapMask[NUM_CLASSES][TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT] = {0};
 
     char *PredictionDirectory = "./Prediction";
     CreateDirectory(PredictionDirectory);
@@ -644,7 +643,6 @@ int main(int argc, const char **argv)
     char *subMaskperClassDirectory = "/MaskperClass/";
     char MaskperClassDirectory[MAX_FILENAME_LENGTH];
 
-    struct Output output;
 
     // Open ImgData.txt that stores Image Directories
     ImageDataFile = fopen(argv[1], "r");
@@ -656,6 +654,7 @@ int main(int argc, const char **argv)
 
     // Read the string from a .txt File
     while (fgets(NameBuffer, sizeof(NameBuffer), ImageDataFile) != NULL && ImageCount < READIMAGE_LIMIT){
+        struct Output output;
         NameBuffer[strcspn(NameBuffer, "\n")] = '\0';
         IplImage *Img = cvLoadImage(NameBuffer, CV_LOAD_IMAGE_COLOR);
         if (!Img){
@@ -670,14 +669,18 @@ int main(int argc, const char **argv)
         int NumDetections = 0;
 
         // Read Input + Process Input + NMS
-        PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, Mask_Coeffs, argv, ImageCount);
+        double preprocess_without_init_time = PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, Mask_Coeffs, argv, ImageCount);
 
         output.NumDetections = NumDetections;
         memcpy(output.detections, ValidDetections, sizeof(struct Object) * NumDetections);
         // Store Masks Results
-        PostProcessing( &output, Mask_Input, Img, Mask, TextColor);
+        double post_process_time = PostProcessing( &output, Mask_Input, Img, Mask, TextColor);
 
-        printf("============Drawing Mask and Labels Complete============\n");
+        printf("================================================\n\n");
+        printf("Total Compute time without init_input & drawing: %.6fms!!!!!!!\n", (preprocess_without_init_time + post_process_time) * 1000);
+        printf("\n================================================\n");
+
+        printf("=========Drawing Mask and Labels Complete=========\n");
 
         // Saving Data
         char BaseName[MAX_FILENAME_LENGTH];
@@ -724,50 +727,113 @@ real    0m0.477s
 user    0m0.463s
 sys     0m0.064s
 
-5 Images
-real    0m4.675s
-user    0m4.763s
-sys     0m0.109s
+===============Reading Image: ./Cars2/11.jpg===============
+Reading Prediction Input...
+Found 30 candidates...
+NMS Done,Got 5 Detections...
+==============Time Spend==============
+-- Init Input time 108.527363 ms
+-- PreProcess time 0.218211 ms
+-- NMS 0.092603 ms
+-- Copied mask coeffs time 0.003226 ms
+-- Handle_proto_test Avg: 1.032674 ms, Total:5.163371 ms
+-- Draw Time: Avg:0.496093 ms, Total: 2.480467 ms
+================================================
 
-OpenMP 
-- sigmoid, mask matrix multiplication
-real    0m0.511s
-user    0m0.662s
-sys     0m0.052s
+Total Compute time without init_input & drawing: 7.957878ms!!!!!!!
 
-- sigmoid, mask matrix multiplication, Calculate IOU
-real    0m0.514s
-user    0m0.651s
-sys     0m0.061s
-
-- sigmoid, mask matrix multiplication, Calculate IOU, max_classpred
-real    0m0.528s
-user    0m0.697s
-sys     0m0.040s
-
-- sigmoid, mask matrix multiplication, max_classpred, Generate_Anchor
-real    0m0.514s
-user    0m0.689s
-sys     0m0.024s
-
-- sigmoid, mask matrix multiplication, max_classpred, Generate_Anchor, Calculate IOU
-real    0m0.482s
-user    0m0.611s
-sys     0m0.061s
+================================================
+=========Drawing Mask and Labels Complete=========
+Save predicted image into ./Prediction/Results/11.jpg.
+5 Masks released
+===============Saved Image Complete===============
 
 
-- sigmoid, mask matrix multiplication, max_classpred, Generate_Anchor, Calculate IOU, Calculate Masks output
-real    0m0.437s
-user    0m0.618s
-sys     0m0.061s
+===============Reading Image: ./Cars2/10.jpg===============
+Reading Prediction Input...
+Found 4 candidates...
+NMS Done,Got 2 Detections...
+==============Time Spend==============
+-- Init Input time 215.656760 ms
+-- PreProcess time 0.113110 ms
+-- NMS 0.052805 ms
+-- Copied mask coeffs time 0.002918 ms
+-- Handle_proto_test Avg: 0.784779 ms, Total:1.569558 ms
+-- Draw Time: Avg:1.200579 ms, Total: 2.401158 ms
+================================================
 
-real    0m0.481s
-user    0m0.644s
-sys     0m0.036s
--- Init Input time 301.988000
--- PreProcess time 3.056000
--- NMS 1.131000
--- Copied time 0.006000
--- handle_proto_test time per detection 7.542636
--- Draw Masks & Labels time per detection 14.104909
+Total Compute time without init_input & drawing: 4.139549ms!!!!!!!
+
+================================================
+=========Drawing Mask and Labels Complete=========
+Save predicted image into ./Prediction/Results/10.jpg.
+2 Masks released
+===============Saved Image Complete===============
+
+
+===============Reading Image: ./Cars2/5.jpg===============
+Reading Prediction Input...
+Found 20 candidates...
+NMS Done,Got 3 Detections...
+==============Time Spend==============
+-- Init Input time 321.717361 ms
+-- PreProcess time 0.130215 ms
+-- NMS 0.043756 ms
+-- Copied mask coeffs time 0.001969 ms
+-- Handle_proto_test Avg: 0.583689 ms, Total:1.751067 ms
+-- Draw Time: Avg:0.851249 ms, Total: 2.553746 ms
+================================================
+
+Total Compute time without init_input & drawing: 4.480753ms!!!!!!!
+
+================================================
+=========Drawing Mask and Labels Complete=========
+Save predicted image into ./Prediction/Results/5.jpg.
+3 Masks released
+===============Saved Image Complete===============
+
+
+===============Reading Image: ./Cars2/6.jpg===============
+Reading Prediction Input...
+Found 65 candidates...
+NMS Done,Got 11 Detections...
+==============Time Spend==============
+-- Init Input time 427.527671 ms
+-- PreProcess time 26.778343 ms
+-- NMS 0.186088 ms
+-- Copied mask coeffs time 0.007072 ms
+-- Handle_proto_test Avg: 1.529826 ms, Total:16.828082 ms
+-- Draw Time: Avg:1.877413 ms, Total: 20.651547 ms
+================================================
+
+Total Compute time without init_input & drawing: 64.451132ms!!!!!!!
+
+================================================
+=========Drawing Mask and Labels Complete=========
+Save predicted image into ./Prediction/Results/6.jpg.
+11 Masks released
+===============Saved Image Complete===============
+
+
+===============Reading Image: ./Cars2/13.jpg===============
+Reading Prediction Input...
+Found 2 candidates...
+NMS Done,Got 1 Detections...
+==============Time Spend==============
+-- Init Input time 542.863286 ms
+-- PreProcess time 1.571224 ms
+-- NMS 0.044202 ms
+-- Copied mask coeffs time 0.004234 ms
+-- Handle_proto_test Avg: 0.435098 ms, Total:0.435098 ms
+-- Draw Time: Avg:0.551168 ms, Total: 0.551168 ms
+================================================
+
+Total Compute time without init_input & drawing: 2.605926ms!!!!!!!
+
+================================================
+=========Drawing Mask and Labels Complete=========
+Save predicted image into ./Prediction/Results/13.jpg.
+1 Masks released
+===============Saved Image Complete===============
+
 */
