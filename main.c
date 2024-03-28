@@ -26,7 +26,6 @@ static void post_regpreds(float (*distance)[4], char *type)
     const int col_bound_arr[3] = { WIDTH0,  WIDTH1,  WIDTH2};
     const float strides[3] = {8.f, 16.f, 32.f};
 
-    #pragma omp parallel for
     for (int stride_index = 0 ; stride_index < 3 ; ++stride_index){
 
         //int end_row_index = row_bound * col_bound;
@@ -34,7 +33,6 @@ static void post_regpreds(float (*distance)[4], char *type)
         int col_bound = col_bound_arr[stride_index];
         float stride = strides[stride_index];
     
-        #pragma omp parallel for collapse(2) schedule(static)
         for (int anchor_points_y = 0 ; anchor_points_y < row_bound ; ++anchor_points_y)
         {   
             //printf("Thread: %d Stride Index: %d\n", omp_get_num_threads(),  stride_index);
@@ -60,7 +58,6 @@ static void post_regpreds(float (*distance)[4], char *type)
     }
     int min_block_size = WIDTH2 * HEIGHT2;
 
-    // #pragma omp parallel for schedule(static, CHUNKSIZE)
     // for(int i = 0 ; i < ROWSIZE ; ++i){
     //     int block_index = i / min_block_size;
     //     int stride_index = (block_index < 16) ? 0 : (block_index < 19) ? 1 : 2;
@@ -109,7 +106,6 @@ static void post_regpreds(float (*distance)[4], char *type)
 static void max_classpred(float (*cls_pred)[NUM_CLASSES], float *max_predictions, int *class_index)
 {
     // Obtain max_prob and the max class index
-    #pragma omp parallel for schedule(static)
     for (int i = 0; i < ROWSIZE ; ++i)
     {
         float *predictions = &cls_pred[i][0];
@@ -163,17 +159,8 @@ static void qsort_inplace(struct Object *Objects, int left, int right)
         }
     }
 
-    #pragma omp parallel sections
-    {
-        #pragma omp section
-        {
-            if (left < j) qsort_inplace(Objects, left, j);
-        }
-        #pragma omp section
-        {
-            if (i < right) qsort_inplace(Objects, i, right);
-        }
-    }
+    if (left < j) qsort_inplace(Objects, left, j);
+    if (i < right) qsort_inplace(Objects, i, right);
 }
 
 int compare_objects(const void *a, const void *b) {
@@ -205,7 +192,6 @@ static void nms_sorted_bboxes(const struct Object *faceobjects, int size, struct
     // Calculated areas
     float areas[ROWSIZE];
 
-    #pragma omp parallel for schedule(static)
     for (int row_index = 0; row_index < size; row_index++)
     {
         areas[row_index] = BoxArea(&faceobjects[row_index].Rect);
@@ -216,7 +202,6 @@ static void nms_sorted_bboxes(const struct Object *faceobjects, int size, struct
     // ==============================
     float maxIOU[ROWSIZE] = {0.f}; // record max value
 
-    #pragma omp parallel for schedule(dynamic)
     for (int cur_index = 0 ; cur_index < size ; ++cur_index) {
         float max_IOU = 0.f;
         for (int c = 0 ; c < cur_index ; ++c) {
@@ -281,7 +266,6 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     int bitwise_num = (1 << shift_num) - 1;
 
     if (AGNOSTIC){
-        #pragma omp parallel for schedule(static)
         for (int row_index = 0; row_index < ROWSIZE; ++row_index)
         {
             if (max_clsprob[row_index] > conf_threshold)
@@ -301,7 +285,6 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
     {
         if (MULTI_LABEL)
         {
-            #pragma omp parallel for collapse(2) schedule(static)
             for (int row_index = 0; row_index < ROWSIZE; ++row_index)
             {
                 for (int class = 0; class < NUM_CLASSES; ++class)
@@ -327,7 +310,6 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
         }
         else
         {
-            #pragma omp parallel for schedule(static)
             for (int row_index = 0; row_index < ROWSIZE; ++row_index)
             {
                 if (max_clsprob[row_index] > conf_threshold)
@@ -381,7 +363,6 @@ static void non_max_suppression_seg(struct Pred_Input *input, char *classes, str
 
 static void CopyMaskCoeffs(float (*DstCoeffs)[NUM_MASKS], const int NumDetections, struct Object *ValidDetections)
 {   
-    //#pragma omp parallel for
     for (int i = 0; i < NumDetections; ++i)
     {
         memcpy(DstCoeffs[i], ValidDetections[i].maskcoeff, sizeof(float) * NUM_MASKS);
@@ -447,7 +428,6 @@ static double PostProcessing(struct Output* output, const float (* Mask_Input)[N
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
     getMaskxyxy(mask_xyxy,  TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
 
-    //#pragma omp parallel for schedule(static)
     for(int i = 0 ; i < NumDetections ; ++i){
         memset(Mask[i], 0, sizeof(uint8_t) * TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT); // 2 / Detection
         struct Object* Detect = &ValidDetections[i];
@@ -459,7 +439,6 @@ static double PostProcessing(struct Output* output, const float (* Mask_Input)[N
 
     int Thickness = (int)fmaxf(roundf((Img->width + Img->height) / 2.f * 0.003f), 2);
 
-    #pragma omp parallel for ordered
     for (int i = NumDetections - 1; i > -1; --i){
         //printf("Thread Num:%d, Index: %d\n", omp_get_thread_num(), i);
         struct Object *Detect = &ValidDetections[i];

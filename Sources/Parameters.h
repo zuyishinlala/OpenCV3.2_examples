@@ -36,9 +36,6 @@
 #define SAVEMASK 0     // True: Save Mask & positions & results  False: only save results
 #define SAVEPERMASK 0  // True: Save Image per Class             False: Don't Save
 
-#define CHUNKSIZE 18
-#define NUMOFTHREADS 4 // Num of cores in CPU
-
 // OpenCV parameters for drawing
 #define MASK_TRANSPARENCY 0.8f // 0 to 1
 #define READIMAGE_LIMIT 10
