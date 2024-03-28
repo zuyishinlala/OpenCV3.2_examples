@@ -26,6 +26,7 @@ static void post_regpreds(float (*distance)[4], char *type)
     const int col_bound_arr[3] = { WIDTH0,  WIDTH1,  WIDTH2};
     const float strides[3] = {8.f, 16.f, 32.f};
 
+    omp_set_num_threads(1);
     #pragma omp parallel for
     for (int stride_index = 0 ; stride_index < 3 ; ++stride_index){
 
@@ -33,7 +34,8 @@ static void post_regpreds(float (*distance)[4], char *type)
         int row_bound = row_bound_arr[stride_index];
         int col_bound = col_bound_arr[stride_index];
         float stride = strides[stride_index];
-    
+
+        omp_set_num_threads(omp_get_max_threads());
         #pragma omp parallel for collapse(2) schedule(static)
         for (int anchor_points_y = 0 ; anchor_points_y < row_bound ; ++anchor_points_y)
         {   
@@ -447,7 +449,7 @@ static double PostProcessing(struct Output* output, const float (* Mask_Input)[N
     int mask_xyxy[4] = {0};             // the real mask in the resized image. left top bottom right
     getMaskxyxy(mask_xyxy,  TRAINED_SIZE_WIDTH, TRAINED_SIZE_HEIGHT, Img->width, Img->height);
 
-    //#pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(static)
     for(int i = 0 ; i < NumDetections ; ++i){
         memset(Mask[i], 0, sizeof(uint8_t) * TRAINED_SIZE_WIDTH * TRAINED_SIZE_HEIGHT); // 2 / Detection
         struct Object* Detect = &ValidDetections[i];
@@ -464,8 +466,8 @@ static double PostProcessing(struct Output* output, const float (* Mask_Input)[N
         //printf("Thread Num:%d, Index: %d\n", omp_get_thread_num(), i);
         struct Object *Detect = &ValidDetections[i];
         RescaleMask( &output->Masks[i], Mask[i], Img, mask_xyxy);
-        DrawMask( Detect->label, MASK_TRANSPARENCY, output->Masks[i], Img);
-        DrawLabel( Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
+        // DrawMask( Detect->label, MASK_TRANSPARENCY, output->Masks[i], Img);
+        // DrawLabel( Detect->Rect, Detect->conf, Detect->label, Thickness, TextColor, Img);
     }
     double draw_masklabel_time = omp_get_wtime();
 
@@ -689,26 +691,26 @@ int main(int argc, const char **argv)
 
     // Read the string from a .txt File
     while (fgets(NameBuffer, sizeof(NameBuffer), ImageDataFile) != NULL && ImageCount < READIMAGE_LIMIT){
-        struct Output output;
         NameBuffer[strcspn(NameBuffer, "\n")] = '\0';
         IplImage *Img = cvLoadImage(NameBuffer, CV_LOAD_IMAGE_COLOR);
         if (!Img){
             printf("%s not found\n", NameBuffer);
             continue;
         }
+        struct Output output;
         init_Output( &output, Img->width, Img->depth);
         printf("*********************************************\n");
         printf("**************Reading Image: %s**************\n", NameBuffer);
         float Mask_Coeffs[MAX_DETECTIONS][NUM_MASKS];
         float Mask_Input[MASK_SIZE_HEIGHT * MASK_SIZE_WIDTH][NUM_MASKS];
-        struct Object ValidDetections[MAX_DETECTIONS];
-        int NumDetections = 0;
+        // struct Object ValidDetections[MAX_DETECTIONS];
+        // int NumDetections = 0;
 
         // Read Input + Process Input + NMS
-        double preprocess_without_init_time = PreProcessing(&Mask_Input[0][0], &NumDetections, ValidDetections, Mask_Coeffs, argv, ImageCount);
+        double preprocess_without_init_time = PreProcessing(&Mask_Input[0][0], &output.NumDetections, output.detections, Mask_Coeffs, argv, ImageCount);
 
-        output.NumDetections = NumDetections;
-        memcpy(output.detections, ValidDetections, sizeof(struct Object) * NumDetections);
+        // output.NumDetections = NumDetections;
+        // memcpy(output.detections, ValidDetections, sizeof(struct Object) * NumDetections);
         // Store Masks Results
         double post_process_time = PostProcessing( &output, Mask_Input, Img, Mask, TextColor);
 
@@ -763,113 +765,211 @@ real    0m0.477s
 user    0m0.463s
 sys     0m0.064s
 
-===============Reading Image: ./Cars2/11.jpg===============
+**************Reading Image: ./Cars2/11.jpg**************
 Reading Prediction Input...
 Found 30 candidates...
-NMS Done,Got 5 Detections...
-==============Time Spend==============
--- Init Input time 108.527363 ms
--- PreProcess time 0.218211 ms
--- NMS 0.092603 ms
--- Copied mask coeffs time 0.003226 ms
--- Handle_proto_test Avg: 1.032674 ms, Total:5.163371 ms
--- Draw Time: Avg:0.496093 ms, Total: 2.480467 ms
+NMS Done,Got 4 Detections...
+-- PreProcess time 0.218677 ms
+-- NMS 0.128042 ms
+-- Copied mask coeffs time 0.003461 ms
+-- Handle_proto_test Avg: 2.174609 ms, Total:8.698437 ms
+-- Rescale Mask Time: Avg:2.095608 ms, Total: 8.382431 ms
 ================================================
 
-Total Compute time without init_input & drawing: 7.957878ms!!!!!!!
+Total Compute time without init_input & drawing: 17.431048ms!!!!!!!
 
 ================================================
 =========Drawing Mask and Labels Complete=========
 Save predicted image into ./Prediction/Results/11.jpg.
-5 Masks released
-===============Saved Image Complete===============
+4 Masks released
+**************Saved Result Complete**************
 
 
-===============Reading Image: ./Cars2/10.jpg===============
+*********************************************
+**************Reading Image: ./Cars2/10.jpg**************
 Reading Prediction Input...
 Found 4 candidates...
 NMS Done,Got 2 Detections...
-==============Time Spend==============
--- Init Input time 215.656760 ms
--- PreProcess time 0.113110 ms
--- NMS 0.052805 ms
--- Copied mask coeffs time 0.002918 ms
--- Handle_proto_test Avg: 0.784779 ms, Total:1.569558 ms
--- Draw Time: Avg:1.200579 ms, Total: 2.401158 ms
+-- PreProcess time 0.125170 ms
+-- NMS 0.058809 ms
+-- Copied mask coeffs time 0.003155 ms
+-- Handle_proto_test Avg: 1.414371 ms, Total:2.828741 ms
+-- Rescale Mask Time: Avg:1.255563 ms, Total: 2.511126 ms
 ================================================
 
-Total Compute time without init_input & drawing: 4.139549ms!!!!!!!
+Total Compute time without init_input & drawing: 5.527001ms!!!!!!!
 
 ================================================
 =========Drawing Mask and Labels Complete=========
 Save predicted image into ./Prediction/Results/10.jpg.
 2 Masks released
-===============Saved Image Complete===============
+**************Saved Result Complete**************
 
 
-===============Reading Image: ./Cars2/5.jpg===============
+*********************************************
+**************Reading Image: ./Cars2/5.jpg**************
 Reading Prediction Input...
 Found 20 candidates...
 NMS Done,Got 3 Detections...
-==============Time Spend==============
--- Init Input time 321.717361 ms
--- PreProcess time 0.130215 ms
--- NMS 0.043756 ms
--- Copied mask coeffs time 0.001969 ms
--- Handle_proto_test Avg: 0.583689 ms, Total:1.751067 ms
--- Draw Time: Avg:0.851249 ms, Total: 2.553746 ms
+-- PreProcess time 0.130278 ms
+-- NMS 0.086364 ms
+-- Copied mask coeffs time 0.002117 ms
+-- Handle_proto_test Avg: 1.180616 ms, Total:3.541847 ms
+-- Rescale Mask Time: Avg:0.962916 ms, Total: 2.888747 ms
 ================================================
 
-Total Compute time without init_input & drawing: 4.480753ms!!!!!!!
+Total Compute time without init_input & drawing: 6.649353ms!!!!!!!
 
 ================================================
 =========Drawing Mask and Labels Complete=========
 Save predicted image into ./Prediction/Results/5.jpg.
 3 Masks released
-===============Saved Image Complete===============
+**************Saved Result Complete**************
 
 
-===============Reading Image: ./Cars2/6.jpg===============
+*********************************************
+**************Reading Image: ./Cars2/6.jpg**************
 Reading Prediction Input...
 Found 65 candidates...
-NMS Done,Got 11 Detections...
-==============Time Spend==============
--- Init Input time 427.527671 ms
--- PreProcess time 26.778343 ms
--- NMS 0.186088 ms
--- Copied mask coeffs time 0.007072 ms
--- Handle_proto_test Avg: 1.529826 ms, Total:16.828082 ms
--- Draw Time: Avg:1.877413 ms, Total: 20.651547 ms
+NMS Done,Got 7 Detections...
+-- PreProcess time 0.126188 ms
+-- NMS 0.161135 ms
+-- Copied mask coeffs time 0.004406 ms
+-- Handle_proto_test Avg: 1.243287 ms, Total:8.703008 ms
+-- Rescale Mask Time: Avg:1.382877 ms, Total: 9.680141 ms
 ================================================
 
-Total Compute time without init_input & drawing: 64.451132ms!!!!!!!
+Total Compute time without init_input & drawing: 18.674878ms!!!!!!!
 
 ================================================
 =========Drawing Mask and Labels Complete=========
 Save predicted image into ./Prediction/Results/6.jpg.
-11 Masks released
-===============Saved Image Complete===============
+7 Masks released
+**************Saved Result Complete**************
 
 
-===============Reading Image: ./Cars2/13.jpg===============
+*********************************************
+**************Reading Image: ./Cars2/13.jpg**************
 Reading Prediction Input...
 Found 2 candidates...
 NMS Done,Got 1 Detections...
-==============Time Spend==============
--- Init Input time 542.863286 ms
--- PreProcess time 1.571224 ms
--- NMS 0.044202 ms
--- Copied mask coeffs time 0.004234 ms
--- Handle_proto_test Avg: 0.435098 ms, Total:0.435098 ms
--- Draw Time: Avg:0.551168 ms, Total: 0.551168 ms
+-- PreProcess time 0.126538 ms
+-- NMS 0.062381 ms
+-- Copied mask coeffs time 0.001710 ms
+-- Handle_proto_test Avg: 1.416893 ms, Total:1.416893 ms
+-- Rescale Mask Time: Avg:0.896938 ms, Total: 0.896938 ms
 ================================================
 
-Total Compute time without init_input & drawing: 2.605926ms!!!!!!!
+Total Compute time without init_input & drawing: 2.504460ms!!!!!!!
 
 ================================================
 =========Drawing Mask and Labels Complete=========
 Save predicted image into ./Prediction/Results/13.jpg.
 1 Masks released
-===============Saved Image Complete===============
+**************Saved Result Complete**************
 
+
+*********************************************
+**************Reading Image: ./Cars2/8.jpg**************
+Reading Prediction Input...
+Found 45 candidates...
+NMS Done,Got 6 Detections...
+-- PreProcess time 0.126793 ms
+-- NMS 0.128357 ms
+-- Copied mask coeffs time 0.005523 ms
+-- Handle_proto_test Avg: 1.133865 ms, Total:6.803191 ms
+-- Rescale Mask Time: Avg:1.322266 ms, Total: 7.933596 ms
+================================================
+
+Total Compute time without init_input & drawing: 14.997460ms!!!!!!!
+
+================================================
+=========Drawing Mask and Labels Complete=========
+Save predicted image into ./Prediction/Results/8.jpg.
+6 Masks released
+**************Saved Result Complete**************
+
+
+*********************************************
+**************Reading Image: ./Cars2/15.jpg**************
+Reading Prediction Input...
+Found 45 candidates...
+NMS Done,Got 6 Detections...
+-- PreProcess time 0.127112 ms
+-- NMS 0.125345 ms
+-- Copied mask coeffs time 0.004401 ms
+-- Handle_proto_test Avg: 1.204008 ms, Total:7.224049 ms
+-- Rescale Mask Time: Avg:1.336102 ms, Total: 8.016615 ms
+================================================
+
+Total Compute time without init_input & drawing: 15.497522ms!!!!!!!
+
+================================================
+=========Drawing Mask and Labels Complete=========
+Save predicted image into ./Prediction/Results/15.jpg.
+6 Masks released
+**************Saved Result Complete**************
+
+
+*********************************************
+**************Reading Image: ./Cars2/7.jpg**************
+Reading Prediction Input...
+Found 32 candidates...
+NMS Done,Got 4 Detections...
+-- PreProcess time 0.126529 ms
+-- NMS 0.093574 ms
+-- Copied mask coeffs time 0.004074 ms
+-- Handle_proto_test Avg: 1.226668 ms, Total:4.906674 ms
+-- Rescale Mask Time: Avg:1.132184 ms, Total: 4.528737 ms
+================================================
+
+Total Compute time without init_input & drawing: 9.659588ms!!!!!!!
+
+================================================
+=========Drawing Mask and Labels Complete=========
+Save predicted image into ./Prediction/Results/7.jpg.
+4 Masks released
+**************Saved Result Complete**************
+
+
+*********************************************
+**************Reading Image: ./Cars2/14.jpg**************
+Reading Prediction Input...
+Found 48 candidates...
+NMS Done,Got 6 Detections...
+-- PreProcess time 0.126925 ms
+-- NMS 0.129927 ms
+-- Copied mask coeffs time 0.004732 ms
+-- Handle_proto_test Avg: 1.246367 ms, Total:7.478204 ms
+-- Rescale Mask Time: Avg:1.336048 ms, Total: 8.016286 ms
+================================================
+
+Total Compute time without init_input & drawing: 15.756074ms!!!!!!!
+
+================================================
+=========Drawing Mask and Labels Complete=========
+Save predicted image into ./Prediction/Results/14.jpg.
+6 Masks released
+**************Saved Result Complete**************
+
+
+*********************************************
+**************Reading Image: ./Cars2/9.jpg**************
+Reading Prediction Input...
+Found 50 candidates...
+NMS Done,Got 8 Detections...
+-- PreProcess time 0.126569 ms
+-- NMS 0.128839 ms
+-- Copied mask coeffs time 0.004452 ms
+-- Handle_proto_test Avg: 1.182509 ms, Total:9.460073 ms
+-- Rescale Mask Time: Avg:1.439363 ms, Total: 11.514907 ms
+================================================
+
+Total Compute time without init_input & drawing: 21.234840ms!!!!!!!
+
+================================================
+=========Drawing Mask and Labels Complete=========
+Save predicted image into ./Prediction/Results/9.jpg.
+8 Masks released
+**************Saved Result Complete**************
 */
